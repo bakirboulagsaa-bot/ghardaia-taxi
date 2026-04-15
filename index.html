@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TAXI TAWAT</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════
+       TAXI TAWAT — Simple App Icon Splash (Option B)
+       Style: Telegram / Uber — one clean icon + text
+  ════════════════════════════════════════════════════ -->
+  <div id="splashScreen">
+
+    <div class="splash-content">
+
+      <!-- ── The Icon ── -->
+      <div id="splashIcon">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+          <defs>
+            <linearGradient id="mainSwoosh" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#4daee6"/>
+              <stop offset="50%" stop-color="#73c5f0"/>
+              <stop offset="100%" stop-color="#c2e6fa"/>
+            </linearGradient>
+            <linearGradient id="swooshShadow" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#0d4a7a"/>
+              <stop offset="100%" stop-color="#217bbd"/>
+            </linearGradient>
+            <filter id="logoGlow" x="-25%" y="-25%" width="150%" height="150%">
+              <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#000" flood-opacity="0.25"/>
+            </filter>
+            <radialGradient id="iconBg" cx="50%" cy="50%" r="70%">
+              <stop offset="0%" stop-color="#59a6e0"/>
+              <stop offset="100%" stop-color="#1562a1"/>
+            </radialGradient>
+          </defs>
+
+          <!-- Backplate: iOS-style rounded icon -->
+          <rect x="0" y="0" width="200" height="200" rx="42" fill="url(#iconBg)" />
+
+          <!-- T white shape -->
+          <path d="M 45,50 L 155,50 L 155,75 L 115,75 L 115,135 L 85,155 L 85,75 L 45,75 Z" 
+                fill="#ffffff" filter="url(#logoGlow)" />
+
+          <!-- Back ring (the visible left sliver) -->
+          <path d="M 21,128 C 10,138 25,155 65,152 C 75,151 85,148 95,144 L 95,136 C 80,142 60,144 40,140 C 27,137 25,133 30,126 Z" 
+                fill="url(#swooshShadow)" />
+
+          <!-- Front Swoosh (the sweeping thick arc) -->
+          <path d="M 15,132 C 50,110 120,70 190,55 C 140,75 75,115 35,148 C 25,155 12,140 15,132 Z" 
+                fill="url(#mainSwoosh)" />
+
+          <!-- Highlight on the swoosh for metallic edge -->
+          <path d="M 20,135 C 50,113 118,74 185,58 C 120,76 65,112 30,140 C 25,144 18,138 20,135 Z" 
+                fill="rgba(255,255,255,0.3)" />
+        </svg>
+      </div>
+
+      <!-- ── Branding text ── -->
+      <div class="v2-branding">
+        <h1 class="splash-title">TAXI TAWAT</h1>
+        <div class="splash-divider">
+          <span></span><span class="splash-diamond">◆</span><span></span>
+        </div>
+        <p class="splash-subtitle">PREMIUM SERVICES</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- App Container -->
+  <div class="app-container">
+
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="logo">
+        <!-- Compact gold circle + T header logo -->
+        <svg viewBox="0 0 200 200" width="36" height="36" xmlns="http://www.w3.org/2000/svg"
+          style="vertical-align:middle;margin-inline-end:10px;border-radius:10px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,0.3);">
+          <defs>
+            <linearGradient id="hdrMainSwoosh" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#4daee6"/>
+              <stop offset="50%" stop-color="#73c5f0"/>
+              <stop offset="100%" stop-color="#c2e6fa"/>
+            </linearGradient>
+            <linearGradient id="hdrSwooshShadow" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#0d4a7a"/>
+              <stop offset="100%" stop-color="#217bbd"/>
+            </linearGradient>
+            <radialGradient id="hdrIconBg" cx="50%" cy="50%" r="70%">
+              <stop offset="0%" stop-color="#59a6e0"/>
+              <stop offset="100%" stop-color="#1562a1"/>
+            </radialGradient>
+          </defs>
+          <rect x="0" y="0" width="200" height="200" rx="42" fill="url(#hdrIconBg)" />
+          <path d="M 45,50 L 155,50 L 155,75 L 115,75 L 115,135 L 85,155 L 85,75 L 45,75 Z" fill="#ffffff" />
+          <path d="M 21,128 C 10,138 25,155 65,152 C 75,151 85,148 95,144 L 95,136 C 80,142 60,144 40,140 C 27,137 25,133 30,126 Z" fill="url(#hdrSwooshShadow)" />
+          <path d="M 15,132 C 50,110 120,70 190,55 C 140,75 75,115 35,148 C 25,155 12,140 15,132 Z" fill="url(#hdrMainSwoosh)" />
+          <path d="M 20,135 C 50,113 118,74 185,58 C 120,76 65,112 30,140 C 25,144 18,138 20,135 Z" fill="rgba(255,255,255,0.3)" />
+        </svg>
+        <span class="app-title">TAXI TAWAT</span>
+      </div>
+      <div class="controls">
+        <button id="profileBtn" class="icon-btn" title="My Profile" data-i18n-title="myProfile">
+          <i data-lucide="user"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="mainContent">
+      <!-- Views will be injected here via JS -->
+    </main>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
