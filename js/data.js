@@ -1,4 +1,4 @@
-const translations = {
+export const translations = {
   en: {
     appTitle: "TAXI TAWAT",
     driverMode: "Driver Login",
@@ -251,7 +251,7 @@ const translations = {
   }
 };
 
-let destinationsList = [
+export let destinationsList = [
   { id: '16', name: { en: 'Algiers', fr: 'Alger', ar: 'الجزائر العاصمة' }, icon: 'map-pin' },
   { id: '19', name: { en: 'Setif', fr: 'Sétif', ar: 'سطيف' }, icon: 'map-pin' },
   { id: '23', name: { en: 'Annaba', fr: 'Annaba', ar: 'عنابة' }, icon: 'map-pin' },
@@ -259,7 +259,7 @@ let destinationsList = [
   { id: '31', name: { en: 'Oran', fr: 'Oran', ar: 'وهران' }, icon: 'map-pin' }
 ];
 
-let trips = [
+export let trips = [
   { id: 1, driverId: 'd1', driverLicense: 'mock-d1', destinationId: '16', driverName: 'Omar B.',   phone: '0555123456', time: '08:00' },
   { id: 2, driverId: 'd2', driverLicense: 'mock-d2', destinationId: '16', driverName: 'Hassan T.', phone: '0555987654', time: '10:30' },
   { id: 3, driverId: 'd3', driverLicense: 'mock-d3', destinationId: '31', driverName: 'Kamel S.',  phone: '0770112233', time: '06:00' },

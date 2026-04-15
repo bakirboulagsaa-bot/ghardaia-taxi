@@ -1,15 +1,38 @@
+import { translations, destinationsList, trips } from './data.js';
+
+// ─── Firebase Integration ──────────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, push, update, increment } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-analytics.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAPq2j3HoksgtSFA3pfffjxoT4HI7gvyAk",
+  authDomain: "taxi-tawat-1fa4d.firebaseapp.com",
+  databaseURL: "https://taxi-tawat-1fa4d-default-rtdb.firebaseio.com",
+  projectId: "taxi-tawat-1fa4d",
+  storageBucket: "taxi-tawat-1fa4d.firebasestorage.app",
+  messagingSenderId: "892501146606",
+  appId: "1:892501146606:web:a6bd974f3e1a40b8896cff",
+  measurementId: "G-QMVMNSCX1M"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const analytics = getAnalytics(app);
+
+// Global live state for real-time sync
+let fbData = {
+    drivers: {},
+    bookings: {}
+};
+
 // ─── Global Language (FORCE ARABIC - MISSION Requirement) ───────────────────
 window.currentLang = 'ar';
 document.documentElement.lang = 'ar';
 document.documentElement.dir = 'rtl';
 localStorage.setItem('tawat_lang', 'ar');
 
-// ─── Real-Time Sync Engine (Anti-Conflict) ────────────────────────────────────
-window.addEventListener('storage', (e) => {
-    if (['tawat_bookings', 'tawat_schedule', 'tawat_special'].includes(e.key)) {
-        window.dispatchEvent(new CustomEvent('tawatSync', { detail: { key: e.key } }));
-    }
-});
+// (The storage event sync is replaced by Firebase listeners)
 
 // ─── Boot ──────────────────────────────────────────────────────────────────────
 (function () {
@@ -39,6 +62,10 @@ window.addEventListener('storage', (e) => {
         driverColor: () => localStorage.getItem('driverColor') || '',
         driverDestId: () => localStorage.getItem('driverDestId') || '',
         schedule: function (dLic) {
+            // Priority: Firebase -> LocalStorage -> Default
+            const fbD = fbData.drivers[dLic];
+            if (fbD && fbD.schedule) return fbD.schedule;
+
             const key = dLic ? ('tawat_sched_' + dLic) : 'tawat_schedule';
             try {
                 const s = JSON.parse(localStorage.getItem(key));
@@ -46,22 +73,23 @@ window.addEventListener('storage', (e) => {
                     return s.map(item => ({ ...item, direction: item.direction || 'to_dest' }));
                 }
             } catch (e) { }
-            // Default: available with 8 seats
+            
             const def = [];
             for (let i = 0; i < 7; i++) def.push({ status: 'available', seats: 8, time: '08:00', direction: 'to_dest' });
             return def;
         },
-        specialDates: function () {
+        specialDates: function (dLic) {
+             const fbD = fbData.drivers[dLic || S.driverLicense()];
+             if (fbD && fbD.specialDates) return fbD.specialDates;
+
             try {
                 const all = JSON.parse(localStorage.getItem('tawat_special')) || [];
                 const todayStr = new Date().toISOString().split('T')[0];
-                const future = all.filter(d => d.date >= todayStr).map(item => ({ ...item, direction: item.direction || 'to_dest' }));
-                if (future.length !== all.length) localStorage.setItem('tawat_special', JSON.stringify(future));
-                return future;
+                return all.filter(d => d.date >= todayStr).map(item => ({ ...item, direction: item.direction || 'to_dest' }));
             } catch (e) { return []; }
         },
         bookings: function () {
-            try { return JSON.parse(localStorage.getItem('tawat_bookings')) || []; } catch (e) { return []; }
+            return Object.values(fbData.bookings || {});
         },
         // Anti-Conflict Checker Bridge
         isAvailable: function (dLic, dateIdx) {
@@ -72,11 +100,54 @@ window.addEventListener('storage', (e) => {
     };
 
     function saveSchedule(dLic, sched) {
+        if (dLic) {
+            update(ref(db, `drivers/${dLic.replace(/\./g, '_')}`), { schedule: sched });
+        }
         const key = dLic ? ('tawat_sched_' + dLic) : 'tawat_schedule';
         localStorage.setItem(key, JSON.stringify(sched));
     }
-    function saveSpecialDates(sd) { localStorage.setItem('tawat_special', JSON.stringify(sd)); }
-    function saveBookings(bks) { localStorage.setItem('tawat_bookings', JSON.stringify(bks)); }
+    function saveSpecialDates(sd) {
+        const dLic = S.driverLicense();
+        if (dLic) {
+            update(ref(db, `drivers/${dLic.replace(/\./g, '_')}`), { specialDates: sd });
+        }
+        localStorage.setItem('tawat_special', JSON.stringify(sd)); 
+    }
+    function saveBookings(bks) { 
+        // Note: New flow uses push() for individual bookings, this is legacy compat
+        // We'll update the booking creation parts to use push(ref(db, 'bookings'), ...)
+    }
+
+    // ── Firebase Sync ────────────────────────────────────────────────────────
+    function initFirebaseSync() {
+        onValue(ref(db, 'drivers'), (snap) => {
+            fbData.drivers = {};
+            snap.forEach(child => {
+                fbData.drivers[child.key.replace(/_/g, '.')] = child.val();
+            });
+            render();
+        });
+
+        onValue(ref(db, 'bookings'), (snap) => {
+            const oldBks = fbData.bookings || {};
+            fbData.bookings = snap.val() || {};
+            
+            // Notification Logic (if a new pending booking appears for us)
+            if (S.userRole() === 'driver') {
+                const dLic = S.driverLicense();
+                Object.keys(fbData.bookings).forEach(id => {
+                    const b = fbData.bookings[id];
+                    if (!oldBks[id] && b.status === 'pending' && b.driverLicense === dLic) {
+                        showTopNotification(b);
+                    }
+                });
+            }
+            render();
+        });
+    }
+
+    // Start Sync
+    initFirebaseSync();
 
     // ── View State ───────────────────────────────────────────────────────────
     let view = 'onboarding';
@@ -397,6 +468,14 @@ window.addEventListener('storage', (e) => {
             localStorage.setItem('driverLicense', license);
             localStorage.setItem('driverColor', color);
             localStorage.setItem('driverDestId', destId);
+
+            // Sync Profile to Firebase
+            const dLicKey = license.replace(/\./g, '_');
+            update(ref(db, `drivers/${dLicKey}`), {
+                profile: { name, phone, license, color, destId },
+                lastSeen: Date.now()
+            });
+
             view = 'driver'; render();
         };
     }
@@ -474,21 +553,41 @@ window.addEventListener('storage', (e) => {
         const dayStatus = effConf ? effConf.status : 'available';
         const list = el('div', 'card-list');
 
-        if (dayStatus === 'off') {
-            list.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;">${t('statusOff')}</p>`;
         } else {
-            const raw = (trips || []).filter(tr => tr.destinationId === selDestId);
-            // If driver views their own route, add their card first
+            // Combine Static Trips and Firebase Drivers
+            const staticTrips = (trips || []).filter(tr => tr.destinationId === selDestId);
+            const firebaseDrivers = Object.values(fbData.drivers)
+                .filter(d => d.profile && d.profile.destId === selDestId)
+                .map(d => ({
+                    ...d.profile,
+                    id: d.profile.license,
+                    driverLicense: d.profile.license,
+                    driverName: d.profile.name,
+                    phone: d.profile.phone,
+                    isFirebase: true
+                }));
+
+            // Filter out static trips that have a firebase equivalent (by license or phone)
+            const raw = [
+                ...staticTrips.filter(st => !firebaseDrivers.some(fd => fd.phone === st.phone || fd.driverLicense === st.driverLicense)),
+                ...firebaseDrivers
+            ];
+
+            // If current user is a driver on this route, show them first
             const dl = S.driverLicense(), dd = S.driverDestId();
             if (S.userRole() === 'driver' && dd === selDestId && dl) {
-                raw.unshift({ id: '__me__', driverName: S.driverName(), driverLicense: dl, phone: S.driverPhone() });
+                // Check if already in raw
+                if (!raw.find(r => r.driverLicense === dl)) {
+                    raw.unshift({ id: '__me__', driverName: S.driverName(), driverLicense: dl, phone: S.driverPhone() });
+                }
             }
+            
             if (raw.length === 0) {
                 list.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;">${t('noTrips')}</p>`;
             } else {
                 raw.forEach((trip, i) => {
-                    // Refresh day configuration to ensure real-time seat counts
-                    const dConf = spDates.find(x => x.date === w[selDateIdx].iso) || sched[selDateIdx];
+                    const dKey = trip.driverLicense || ('mock-' + (trip.driverId || trip.id));
+                    const dConf = spDates.find(x => x.date === w[selDateIdx].iso) || S.schedule(dKey)[selDateIdx];
                     const card = createTripCard(trip, i, trip.id === '__me__', dConf);
                     if (card) list.appendChild(card);
                 });
@@ -579,6 +678,7 @@ window.addEventListener('storage', (e) => {
                         return;
                     }
 
+                    const dLicKey = dKey.replace(/\./g, '_');
                     const sched = S.schedule(dKey);
                     const activeSched = sched[selDateIdx];
 
@@ -589,16 +689,20 @@ window.addEventListener('storage', (e) => {
                     }
                     saveSchedule(dKey, sched);
 
-                    const allBks = S.bookings();
-                    allBks.push({
-                        id: Date.now(), driverLicense: dKey, driverName: trip.driverName, driverPhone: trip.phone || '',
-                        passengerName: S.passengerName(), passengerPhone: S.passengerPhone(),
-                        dateIndex: selDateIdx, status: 'pending'
-                    });
-                    saveBookings(allBks);
+                    // Sync Booking to Firebase
+                    const newBk = {
+                        driverLicense: dKey, 
+                        driverName: trip.driverName, 
+                        driverPhone: trip.phone || '',
+                        passengerName: S.passengerName(), 
+                        passengerPhone: S.passengerPhone(),
+                        dateIndex: selDateIdx, 
+                        status: 'pending',
+                        timestamp: Date.now()
+                    };
+                    const bRef = push(ref(db, 'bookings'));
+                    set(bRef, { ...newBk, id: bRef.key });
 
-                    // Trigger multi-tab sync
-                    localStorage.setItem('tawat_bookings_trigger', Date.now());
                     render();
                 };
             }
@@ -684,26 +788,23 @@ window.addEventListener('storage', (e) => {
               `;
 
                 card.querySelector('.acc-btn').onclick = () => {
-                    const allB = S.bookings(); const b = allB.find(x => x.id === req.id);
-                    if (b) {
-                        b.status = 'confirmed';
-                        // Seats already decremented on booking request as per mission logic
-                        saveBookings(allB);
+                    if (req.id) {
+                        update(ref(db, `bookings/${req.id}`), { status: 'confirmed' });
                         document.body.removeChild(dialog);
                         render();
                     }
                 };
 
                 card.querySelector('.dec-btn').onclick = () => {
-                    const allB = S.bookings(); const b = allB.find(x => x.id === req.id);
-                    if (b) {
-                        b.status = 'cancelled';
+                    if (req.id) {
+                        update(ref(db, `bookings/${req.id}`), { status: 'cancelled' });
+                        
                         // Re-increment seats if booking is declined/cancelled
-                        const activeSched = sched[b.dateIndex] || sched[0];
+                        const dLicKey = dLic.replace(/\./g, '_');
+                        const activeSched = sched[req.dateIndex] || sched[0];
                         activeSched.seats++;
                         if (activeSched.status === 'full') activeSched.status = 'available';
-                        saveBookings(allB);
-                        // FIX: saveSchedule requires TWO arguments: (driverLicenseKey, scheduleArray)
+                        
                         saveSchedule(dLic, sched);
                         document.body.removeChild(dialog);
                         render();
