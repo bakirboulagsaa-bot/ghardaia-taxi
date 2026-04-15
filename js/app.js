@@ -553,6 +553,8 @@ localStorage.setItem('tawat_lang', 'ar');
         const dayStatus = effConf ? effConf.status : 'available';
         const list = el('div', 'card-list');
 
+        if (dayStatus === 'off') {
+            list.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;"><i data-lucide="calendar-x" style="width:48px;height:48px;display:block;margin:0 auto 16px;opacity:0.5;"></i>${t('noTripsOnDate')}</p>`;
         } else {
             // Combine Static Trips and Firebase Drivers
             const staticTrips = (trips || []).filter(tr => tr.destinationId === selDestId);
