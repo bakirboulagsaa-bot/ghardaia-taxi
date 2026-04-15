@@ -82,7 +82,8 @@ export const translations = {
     driverProfile: "Driver Profile",
     to: "To",
     headingTo: "Heading to",
-    confirmToCall: "Confirm booking to view number"
+    confirmToCall: "Confirm booking to view number",
+    passengerManifest: "Passenger Manifest"
   },
   fr: {
     appTitle: "TAXI TAWAT",
@@ -167,7 +168,8 @@ export const translations = {
     to: "Vers",
     headingTo: "En direction de",
     bookingConflict: "Vous avez déjà une réservation pour ce jour !",
-    confirmToCall: "Confirmez la réservation pour voir le numéro"
+    confirmToCall: "Confirmez la réservation pour voir le numéro",
+    passengerManifest: "Liste des Passagers"
   },
   ar: {
     appTitle: "تاكسي توات",
@@ -253,7 +255,8 @@ export const translations = {
     to: "إلى",
     toGhardaia: "إلى غرداية",
     headingTo: "متوجه إلى",
-    confirmToCall: "يجب تأكيد الحجز لرؤية الرقم"
+    confirmToCall: "يجب تأكيد الحجز لرؤية الرقم",
+    passengerManifest: "قائمة الركاب"
   }
 };
 

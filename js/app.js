@@ -1012,11 +1012,14 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         const content = el('div');
         content.style.cssText = 'width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:24px;';
         content.innerHTML = `
-          <div style="position:relative;">
-              <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg, var(--accent-color), #3b82f6);display:flex;align-items:center;justify-content:center;border:4px solid rgba(255,255,255,0.1);box-shadow:0 10px 25px rgba(0,0,0,0.3);">
-                  <i data-lucide="user" style="width:60px;height:60px;color:#fff;"></i>
+          <div style="position:relative; cursor:pointer;" onclick="renderProfile(); document.body.removeChild(document.querySelector('.tawat-modal'));">
+              <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg, var(--accent-color), #3b82f6);display:flex;align-items:center;justify-content:center;border:4px solid rgba(255,255,255,0.1);box-shadow:0 10px 25px rgba(0,0,0,0.3); overflow:hidden;">
+                  ${S.driverPhotoURL() ? `<img src="${S.driverPhotoURL()}" style="width:100%;height:100%;object-fit:cover;" />` : `<i data-lucide="user" style="width:60px;height:60px;color:#fff;"></i>`}
               </div>
               <div style="position:absolute;bottom:5px;right:5px;width:24px;height:24px;background:#22c55e;border-radius:50%;border:3px solid #0f172a;"></div>
+              <div style="position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);padding:4px 10px;border-radius:12px;font-size:0.7rem;color:#fff;white-space:nowrap;border:1px solid rgba(255,255,255,0.2);">
+                  <i data-lucide="camera" style="width:12px;height:12px;vertical-align:middle;"></i> Edit
+              </div>
           </div>
 
           <div style="text-align:center;">
@@ -1098,8 +1101,8 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                     </div>
                     ${allPends.length > 0 ? `<div style="position:absolute; top:-2px; right:-2px; background:#ef4444; color:#fff; font-size:10px; font-weight:bold; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid var(--bg-color);">${allPends.length}</div>` : ''}
                 </div>
-                <div style="width:44px; height:44px; border-radius:50%; background:var(--accent-color); display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.2);" id="btnDriverProfile">
-                    <i data-lucide="user" style="width:24px; height:24px; color:#fff;"></i>
+                <div style="width:44px; height:44px; border-radius:50%; background:var(--accent-color); display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.2); overflow:hidden; border:2px solid rgba(255,255,255,0.2);" id="btnDriverProfile">
+                    ${S.driverPhotoURL() ? `<img src="${S.driverPhotoURL()}" style="width:100%;height:100%;object-fit:cover;" />` : `<i data-lucide="user" style="width:24px; height:24px; color:#fff;"></i>`}
                 </div>
             </div>`;
         mc.appendChild(hdr);
@@ -1230,29 +1233,59 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 mc.appendChild(acc);
             }
 
-            // Render today's requests
-            let todayReqsRendered = 0;
-            const reqs = allBks.filter(b => b.driverLicense === dLic && (b.status === 'pending' || b.status === 'confirmed') && b.dateIndex === 0);
-            reqs.forEach(req => {
-                if (req.passengerName.toLowerCase().includes(q) || req.passengerPhone.includes(q)) {
-                    todayReqsRendered++;
-                    const pcard = el('div', 'glass-card animate-in');
-                    pcard.style.cssText = 'flex-direction:column;gap:8px;padding:16px;margin-bottom:8px;';
-                    pcard.innerHTML = `
-                    <div style="display:flex;justify-content:space-between;">
-                        <div>
-                            <div style="font-weight:700;">${req.passengerName}</div>
-                            <div style="font-size:0.8rem;color:var(--text-muted);">${req.passengerPhone}</div>
-                        </div>
-                        <div style="color:${req.status === 'confirmed' ? '#28a745' : '#f59e0b'};font-weight:700;">
-                            ${req.status.toUpperCase()}
-                        </div>
-                    </div>`;
-                    mc.appendChild(pcard);
-                }
-            });
+            // Render passenger manifest strictly below today's route module
+            if (todayItemsRendered > 0) {
+                let todayReqsRendered = 0;
+                const reqs = allBks.filter(b => b.driverLicense === dLic && (b.status === 'pending' || b.status === 'confirmed') && b.dateIndex === 0);
+                
+                const manifestSection = el('div', 'manifest-section animate-in');
+                manifestSection.style.cssText = 'margin-top:24px; display:flex; flex-direction:column; gap:12px;';
+                manifestSection.innerHTML = `<h3 style="color:#fff;font-size:1.1rem;margin:0 0 8px 4px;font-weight:800;display:flex;align-items:center;gap:8px;"><i data-lucide="users" style="color:var(--accent-color);"></i> ${t('passengerManifest')}</h3>`;
+                
+                reqs.forEach(req => {
+                    if (req.passengerName.toLowerCase().includes(q) || req.passengerPhone.includes(q)) {
+                        todayReqsRendered++;
+                        
+                        const isConfirmed = req.status === 'confirmed';
+                        const pAvatar = (fbData.passengers && fbData.passengers[req.passengerPhone] && fbData.passengers[req.passengerPhone].photoURL) 
+                                        ? fbData.passengers[req.passengerPhone].photoURL 
+                                        : 'https://www.w3schools.com/howto/img_avatar.png';
+                        const maskedPhone = isConfirmed ? req.passengerPhone : (req.passengerPhone.slice(0, 4) + ' ••• •• ' + req.passengerPhone.slice(-2));
 
-            if (todayItemsRendered === 0 && todayReqsRendered === 0 && q) {
+                        const pcard = el('div', 'glass-card passenger-profile-trigger');
+                        pcard.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:16px;border-radius:16px;cursor:pointer;transition:border-color 0.2s;';
+                        pcard.innerHTML = `
+                            <div style="display:flex;gap:12px;align-items:center;">
+                                <div style="position:relative;">
+                                    <img src="${pAvatar}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid ${isConfirmed ? '#28a745' : '#f59e0b'};" />
+                                    ${isConfirmed ? `<div style="position:absolute;bottom:-2px;right:-2px;background:#28a745;border-radius:50%;width:14px;height:14px;border:2px solid #0f172a;"></div>` : ''}
+                                </div>
+                                <div>
+                                    <div style="font-weight:700;color:#fff;font-size:1.05rem;">${req.passengerName}</div>
+                                    <div style="font-size:0.8rem;color:var(--text-muted);direction:ltr;margin-top:2px;">${maskedPhone}</div>
+                                </div>
+                            </div>
+                            <div style="color:${isConfirmed ? '#28a745' : '#f59e0b'};font-weight:800;font-size:0.8rem;background:${isConfirmed ? 'rgba(40,167,69,0.1)' : 'rgba(245,158,11,0.1)'};padding:6px 12px;border-radius:12px;">
+                                ${req.status.toUpperCase()}
+                            </div>
+                        `;
+                        pcard.onclick = () => openPassengerProfileDialog(req.passengerPhone, req.status);
+                        manifestSection.appendChild(pcard);
+                    }
+                });
+
+                if (todayReqsRendered > 0) {
+                    mc.appendChild(manifestSection);
+                } else if (!q) {
+                    const empty = el('div');
+                    empty.style.cssText = 'text-align:center;padding:16px;color:rgba(255,255,255,0.4);font-size:0.9rem;border:1px dashed rgba(255,255,255,0.1);border-radius:16px;margin-top:8px;';
+                    empty.innerHTML = `<i data-lucide="user-x" style="width:32px;height:32px;margin-bottom:8px;opacity:0.5;"></i><br>${t('noBookingsToday')}`;
+                    manifestSection.appendChild(empty);
+                    mc.appendChild(manifestSection);
+                }
+            }
+
+            if (todayItemsRendered === 0 && q) {
                 const empty = el('div');
                 empty.style.cssText = 'text-align:center;padding:24px;color:var(--text-muted);';
                 empty.textContent = t('noTripsOnDate');
