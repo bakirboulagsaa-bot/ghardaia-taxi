@@ -26,11 +26,10 @@ let fbData = {
     bookings: {}
 };
 
-// ─── Global Language (FORCE ARABIC - MISSION Requirement) ───────────────────
-window.currentLang = 'ar';
-document.documentElement.lang = 'ar';
-document.documentElement.dir = 'rtl';
-localStorage.setItem('tawat_lang', 'ar');
+// ─── Global Language Logic (Localized Persistence) ───────────────────
+window.currentLang = localStorage.getItem('tawat_lang') || 'ar';
+document.documentElement.lang = window.currentLang;
+document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
 // (The storage event sync is replaced by Firebase listeners)
 
@@ -38,17 +37,19 @@ localStorage.setItem('tawat_lang', 'ar');
 (function () {
     'use strict';
 
-    // ── Translation (LOCKED TO ARABIC) ──────────────────────────────────────
+    // ── Translation System ──────────────────────────────────────────────────
     function t(key) {
-        const lang = 'ar';
-        return (translations && translations[lang] && translations[lang][key]) || key;
+        const lang = window.currentLang || 'ar';
+        return (translations && translations[lang] && translations[lang][key]) 
+            || (translations && translations['en'] && translations['en'][key]) 
+            || key;
     }
 
-    function setLang(lang) { // eslint-disable-line no-unused-vars
-        window.currentLang = 'ar';
-        localStorage.setItem('tawat_lang', 'ar');
-        document.documentElement.lang = 'ar';
-        document.documentElement.dir = 'rtl';
+    function setLang(lang) {
+        window.currentLang = lang;
+        localStorage.setItem('tawat_lang', lang);
+        document.documentElement.lang = lang;
+        document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
     }
 
     // ── State ────────────────────────────────────────────────────────────────
