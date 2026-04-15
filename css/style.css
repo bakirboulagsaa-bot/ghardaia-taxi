@@ -730,7 +730,7 @@ html[dir="rtl"] .glass-input {
 }
 
 .modern-dropdown {
-  padding: 12px 36px 12px 16px;
+  padding: 12px 32px 12px 12px; /* Reduced for better fit */
   border-radius: 12px;
   border: 2px solid rgba(255,255,255,0.15);
   color: #FFFFFF;
@@ -747,9 +747,19 @@ html[dir="rtl"] .glass-input {
   background-position: right 14px center;
 }
 html[dir="rtl"] .modern-dropdown {
-  padding: 12px 16px 12px 36px !important;
+  padding: 12px 12px 12px 32px !important;
   background-position: left 14px center !important;
   text-align: right;
+}
+/* Specific fix for small seat dropdown overlaps */
+.seat-dropdown {
+  width: 85px !important;
+  padding-right: 30px !important;
+  padding-left: 10px !important;
+}
+html[dir="rtl"] .seat-dropdown {
+  padding-left: 30px !important;
+  padding-right: 10px !important;
 }
 .modern-dropdown:hover {
   filter: brightness(1.15);
