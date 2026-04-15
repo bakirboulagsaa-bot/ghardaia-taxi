@@ -52,6 +52,16 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
     }
 
+    function isPast(timeStr, dateIdx) {
+        if (dateIdx > 0) return false; // Only today's trips can be "past"
+        if (!timeStr) return false;
+        const now = new Date();
+        const [h, m] = timeStr.split(':').map(Number);
+        const tripTime = new Date();
+        tripTime.setHours(h, m, 0, 0);
+        return now > tripTime;
+    }
+
     // ── State ────────────────────────────────────────────────────────────────
     const S = {
         userRole: () => localStorage.getItem('userRole'),
@@ -94,6 +104,12 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         },
         // Anti-Conflict Checker Bridge
         isAvailable: function (dLic, dateIdx) {
+            const w = week();
+            const iso = w[dateIdx].iso;
+            const sps = this.specialDates(dLic);
+            const sp = sps.find(x => x.date === iso);
+            if (sp) return sp.status !== 'full' && sp.seats > 0 && sp.status !== 'off';
+            
             const sched = this.schedule(dLic);
             const eff = sched[dateIdx];
             return eff && eff.status !== 'full' && eff.seats > 0 && eff.status !== 'off';
@@ -578,10 +594,26 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
             // If current user is a driver on this route, show them first
             const dl = S.driverLicense(), dd = S.driverDestId();
+            const final = raw.filter(tr => {
+                const dKey = tr.driverLicense || ('mock-' + (tr.driverId || tr.id));
+                const currentSched = S.schedule(dKey);
+                const dayCfg = spDates.find(x => x.date === w[selDateIdx].iso) || currentSched[selDateIdx];
+                if (!dayCfg || dayCfg.status === 'off') return false;
+                
+                // Auto-Archive: Filter out past trips for today
+                if (isPast(dayCfg.time, selDateIdx)) return false;
+                
+                return true;
+            }).sort((a,b) => {
+                if (a.id === '__me__') return -1;
+                if (b.id === '__me__') return 1;
+                return 0;
+            });
+
             if (S.userRole() === 'driver' && dd === selDestId && dl) {
                 // Check if already in raw
                 if (!raw.find(r => r.driverLicense === dl)) {
-                    raw.unshift({ id: '__me__', driverName: S.driverName(), driverLicense: dl, phone: S.driverPhone() });
+                    final.unshift({ id: '__me__', driverName: S.driverName(), driverLicense: dl, phone: S.driverPhone() });
                 }
             }
             
@@ -617,20 +649,20 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
         // Top row (Strict Absolute Centering for Activity Icon)
         const top = el('div', 'trip-header');
-        top.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; gap:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px; position:relative;';
+        top.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; gap:8px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;';
         top.innerHTML = `
-            <div class="driver-info" style="flex:1; display:flex; align-items:center; gap:10px;">
-                <div class="driver-avatar" style="width:40px;height:40px;background:rgba(255,255,255,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.1);"><i data-lucide="user"></i></div>
-                <div>
-                    <div class="driver-name" style="font-weight:700;color:#fff;">${trip.driverName}</div>
-                    <div class="digital-clock" style="margin-top:2px;font-size:0.75rem;color:var(--text-muted);">🕒 ${fmt12(isMe ? dayConf.time : (trip.time || '08:30'))}</div>
+            <div class="driver-info" style="flex:1.4; display:flex; align-items:center; gap:10px; min-width:0;">
+                <div class="driver-avatar" style="width:38px;height:38px;min-width:38px;background:rgba(255,255,255,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.1);"><i data-lucide="user"></i></div>
+                <div style="min-width:0; overflow:hidden;">
+                    <div class="driver-name" style="font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${trip.driverName}</div>
+                    <div class="digital-clock" style="margin-top:2px;font-size:0.7rem;color:var(--text-muted);">🕒 ${fmt12(isMe ? dayConf.time : (trip.time || '08:30'))}</div>
                 </div>
             </div>
-            <div style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center;">
-                <i data-lucide="activity" style="width:20px; height:20px; color:var(--accent-color); opacity:0.9;"></i>
+            <div style="display:flex; align-items:center; justify-content:center; padding:0 4px;">
+                <i data-lucide="activity" style="width:18px; height:18px; color:var(--accent-color); opacity:0.8;"></i>
             </div>
-            <div style="flex:1; display:flex; justify-content:flex-end;">
-                <div class="seats-indicator ${dayConf.status === 'full' ? 'status-full' : (dayConf.seats <= 2 && dayConf.seats > 0) ? 'status-warn' : 'status-good'}" style="padding:6px 12px; border-radius:10px; font-weight:700; font-size:0.85rem; display:flex; align-items:center; gap:6px;">
+            <div style="flex:1.2; display:flex; justify-content:flex-end;">
+                <div class="seats-indicator ${dayConf.status === 'full' ? 'status-full' : (dayConf.seats <= 2 && dayConf.seats > 0) ? 'status-warn' : 'status-good'}" style="padding:6px 10px; border-radius:10px; font-weight:700; font-size:0.8rem; display:flex; align-items:center; gap:6px; white-space:nowrap;">
                     <div class="seat-dot" style="width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor;"></div>
                     ${dayConf.status === 'full' ? t('statusFull') : dayConf.seats + ' ' + t('seatsAvailable')}
                 </div>
@@ -671,26 +703,38 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             } else {
                 bookBtn.innerHTML = `<i data-lucide="calendar-plus"></i> ${t('bookNow')}`;
                 bookBtn.onclick = () => {
+                    // Double-Booking Prevention
+                    const myBks = S.bookings();
+                    const conflict = myBks.find(b => b.passengerPhone === S.passengerPhone() && b.dateIndex === selDateIdx && b.status !== 'cancelled');
+                    if (conflict) {
+                        alert(translations[window.currentLang].bookingConflict || "You already have a booking for this day!");
+                        return;
+                    }
+
                     // Conflict Resolution & Architecture Fix (Real-Time Availability Check)
                     if (!S.isAvailable(dKey, selDateIdx)) {
-                        const sched = S.schedule(dKey);
-                        sched[selDateIdx].status = 'full';
-                        sched[selDateIdx].seats = 0;
-                        saveSchedule(dKey, sched);
+                        alert(t('statusFull'));
                         render();
                         return;
                     }
 
                     const dLicKey = dKey.replace(/\./g, '_');
-                    const sched = S.schedule(dKey);
-                    const activeSched = sched[selDateIdx];
+                    const w = week();
+                    const iso = w[selDateIdx].iso;
+                    const sps = S.specialDates(dKey);
+                    const sp = sps.find(x => x.date === iso);
 
-                    activeSched.seats--;
-                    if (activeSched.seats <= 0) {
-                        activeSched.seats = 0;
-                        activeSched.status = 'full';
+                    if (sp) {
+                        sp.seats--;
+                        if (sp.seats <= 0) { sp.seats = 0; sp.status = 'full'; }
+                        saveSpecialDates(sps);
+                    } else {
+                        const sched = S.schedule(dKey);
+                        const activeSched = sched[selDateIdx];
+                        activeSched.seats--;
+                        if (activeSched.seats <= 0) { activeSched.seats = 0; activeSched.status = 'full'; }
+                        saveSchedule(dKey, sched);
                     }
-                    saveSchedule(dKey, sched);
 
                     // Sync Booking to Firebase
                     const newBk = {
@@ -1024,7 +1068,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
             // Render today's route
             let todayItemsRendered = 0;
-            if (`${t(w[0].key)} ${w[0].num}`.toLowerCase().includes(q) || dDestName.toLowerCase().includes(q) || dateMatches(todayIso, q)) {
+            if (!isPast(effConf.time, 0) && (`${t(w[0].key)} ${w[0].num}`.toLowerCase().includes(q) || dDestName.toLowerCase().includes(q) || dateMatches(todayIso, q))) {
                 todayItemsRendered++;
                 const curColor = bgColors[effConf.status] || 'rgba(0,0,0,0.3)';
                 const content = `

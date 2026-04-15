@@ -26,6 +26,7 @@ export const translations = {
     whatsappRequest: "WhatsApp Request",
     passengerLoginHeading: "Welcome to Taxi Tawat",
     waMsg: "Hello! I am",
+    bookingConflict: "You already have a booking for this day!",
     myProfile: "My Profile",
     updateProfile: "Update Profile",
     addPhoto: "Add Photo",
@@ -163,7 +164,8 @@ export const translations = {
     rating: "Évaluation",
     driverProfile: "Profil Chauffeur",
     to: "Vers",
-    headingTo: "En direction de"
+    headingTo: "En direction de",
+    bookingConflict: "Vous avez déjà une réservation pour ce jour !"
   },
   ar: {
     appTitle: "تاكسي توات",
@@ -198,6 +200,7 @@ export const translations = {
     changePhoto: "تغيير الصورة",
     enterEmail: "البريد الإلكتروني (اختياري)",
     chooseRole: "هل أنت سائق أم مسافر؟",
+    bookingConflict: "لديك حجز مسبق في هذا اليوم بالفعل!",
     iAmDriver: "أنا سائق",
     iAmTraveler: "أنا مسافر",
     driverRegistrationHeading: "تسجيل السائق",
