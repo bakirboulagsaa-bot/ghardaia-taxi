@@ -3,6 +3,7 @@ import { translations, destinationsList, trips } from './data.js';
 // ─── Firebase Integration ──────────────────────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
 import { getDatabase, ref, set, onValue, push, update, increment } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-analytics.js";
 
 const firebaseConfig = {
@@ -18,6 +19,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const storage = getStorage(app);
 const analytics = getAnalytics(app);
 
 // Global live state for real-time sync
@@ -72,6 +74,11 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         driverLicense: () => localStorage.getItem('driverLicense') || '',
         driverColor: () => localStorage.getItem('driverColor') || '',
         driverDestId: () => localStorage.getItem('driverDestId') || '',
+        passengerPhotoURL: () => localStorage.getItem('passengerPhotoURL') || '',
+        driverPhotoURL: (dLic) => {
+            const fbD = fbData.drivers[dLic || S.driverLicense()];
+            return (fbD && fbD.profile && fbD.profile.photoURL) ? fbD.profile.photoURL : '';
+        },
         schedule: function (dLic) {
             // Priority: Firebase -> LocalStorage -> Default
             const fbD = fbData.drivers[dLic];
@@ -130,6 +137,29 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         }
         localStorage.setItem('tawat_special', JSON.stringify(sd)); 
     }
+
+    async function handlePhotoUpload(file, role, userId) {
+        try {
+            const path = `profiles/${role}/${userId.replace(/\./g, '_')}_${Date.now()}`;
+            const storageRef = sRef(storage, path);
+            const snapshot = await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(snapshot.ref);
+            
+            if (role === 'driver') {
+                update(ref(db, `drivers/${userId.replace(/\./g, '_')}/profile`), { photoURL: url });
+            } else {
+                localStorage.setItem('passengerPhotoURL', url);
+                // Sync to a specific passengers node for mutual lookup
+                update(ref(db, `passengers/${userId}`), { photoURL: url, name: S.passengerName() });
+            }
+            return url;
+        } catch (e) {
+            console.error("Upload failed", e);
+            alert("Photo upload failed. Please try again.");
+            return null;
+        }
+    }
+
     function saveBookings(bks) { 
         // Note: New flow uses push() for individual bookings, this is legacy compat
         // We'll update the booking creation parts to use push(ref(db, 'bookings'), ...)
@@ -161,6 +191,88 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             }
             render();
         });
+
+        onValue(ref(db, 'passengers'), (snap) => {
+            fbData.passengers = snap.val() || {};
+            render();
+        });
+    }
+
+    // Modal helpers for Trust System
+    function openDriverProfileViewDialog(dLic) {
+        const d = fbData.drivers[dLic];
+        if (!d || !d.profile) return;
+        const p = d.profile;
+        const dialog = el('div', 'tawat-modal animate-in');
+        dialog.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(15px);z-index:9999;display:flex;flex-direction:column;align-items:center;padding:24px;overflow-y:auto;';
+
+        const avatar = p.photoURL || 'https://www.w3schools.com/howto/img_avatar.png';
+
+        dialog.innerHTML = `
+            <div style="width:100%;max-width:400px;display:flex;justify-content:flex-end;">
+                <button id="closeDrView" style="background:rgba(255,255,255,0.1);color:#fff;border:none;width:40px;height:40px;border-radius:50%;cursor:pointer;"><i data-lucide="x"></i></button>
+            </div>
+            <div style="width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:20px;margin-top:20px;">
+                <img src="${avatar}" style="width:140px;height:140px;border-radius:50%;object-fit:cover;border:4px solid var(--accent-color);box-shadow:0 10px 30px rgba(0,0,0,0.5);" />
+                <div style="text-align:center;">
+                    <h2 style="color:#fff;font-size:1.8rem;margin:0;">${p.name}</h2>
+                    <div style="color:var(--accent-color);font-weight:700;margin-top:4px;">★ 4.9 ${t('rating')}</div>
+                </div>
+                <div class="glass-card" style="width:100%;flex-direction:column;gap:16px;padding:20px;background:rgba(255,255,255,0.03);">
+                    <div style="display:flex;justify-content:space-between;">
+                        <span style="color:var(--text-muted);">${t('carDetails')}</span>
+                        <span style="color:#fff;font-weight:700;">${p.color}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span style="color:var(--text-muted);">${t('licensePlate')}</span>
+                        <span style="color:#fff;font-weight:700;direction:ltr;">${p.license}</span>
+                    </div>
+                </div>
+                <a href="tel:${p.phone}" class="call-btn" style="width:100%;justify-content:center;">
+                    <i data-lucide="phone"></i> ${t('callDriver')}
+                </a>
+            </div>
+        `;
+        document.body.appendChild(dialog);
+        if (window.lucide) lucide.createIcons();
+        dialog.querySelector('#closeDrView').onclick = () => document.body.removeChild(dialog);
+    }
+
+    function openPassengerProfileDialog(phone, status) {
+        const p = (fbData.passengers && fbData.passengers[phone]) ? fbData.passengers[phone] : { name: 'Passenger', photoURL: '' };
+        const dialog = el('div', 'tawat-modal animate-in');
+        dialog.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(15px);z-index:9999;display:flex;flex-direction:column;align-items:center;padding:24px;overflow-y:auto;';
+
+        const avatar = p.photoURL || 'https://www.w3schools.com/howto/img_avatar.png';
+        const isConfirmed = status === 'confirmed';
+        const displayPhone = isConfirmed ? phone : (phone.slice(0, 4) + ' ••• •• ' + phone.slice(-2));
+
+        dialog.innerHTML = `
+            <div style="width:100%;max-width:400px;display:flex;justify-content:flex-end;">
+                <button id="closePsView" style="background:rgba(255,255,255,0.1);color:#fff;border:none;width:40px;height:40px;border-radius:50%;cursor:pointer;"><i data-lucide="x"></i></button>
+            </div>
+            <div style="width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:20px;margin-top:20px;">
+                <img src="${avatar}" style="width:140px;height:140px;border-radius:50%;object-fit:cover;border:4px solid var(--accent-color);box-shadow:0 10px 30px rgba(0,0,0,0.5);" />
+                <div style="text-align:center;">
+                    <h2 style="color:#fff;font-size:1.8rem;margin:0;">${p.name}</h2>
+                    <div style="color:var(--text-muted);font-size:1rem;margin-top:4px;direction:ltr;">${displayPhone}</div>
+                </div>
+                ${isConfirmed ? `
+                    <div style="display:flex;gap:12px;width:100%;">
+                        <a href="tel:${phone}" class="call-btn" style="flex:1;justify-content:center;"><i data-lucide="phone"></i></a>
+                        <a href="https://wa.me/${phone.replace(/^0/, '213')}?text=${encodeURIComponent(t('waMsg') + ' ' + S.driverName())}" target="_blank" class="call-btn" style="flex:1;background:#25D366;justify-content:center;"><i data-lucide="message-circle"></i></a>
+                    </div>
+                ` : `
+                    <div style="background:rgba(239,68,68,0.1);color:#ef4444;padding:12px;border-radius:12px;font-size:0.85rem;text-align:center;border:1px solid rgba(239,68,68,0.2);">
+                        <i data-lucide="shield-alert" style="width:16px;height:16px;vertical-align:middle;margin-inline-end:4px;"></i>
+                        Phone number hidden until confirmed
+                    </div>
+                `}
+            </div>
+        `;
+        document.body.appendChild(dialog);
+        if (window.lucide) lucide.createIcons();
+        dialog.querySelector('#closePsView').onclick = () => document.body.removeChild(dialog);
     }
 
     // Start Sync
@@ -649,10 +761,11 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
         // Top row (Strict Absolute Centering for Activity Icon)
         const top = el('div', 'trip-header');
-        top.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; gap:8px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;';
+        const avatar = S.driverPhotoURL(dKey) || 'https://www.w3schools.com/howto/img_avatar.png';
+
         top.innerHTML = `
-            <div class="driver-info" style="flex:1.4; display:flex; align-items:center; gap:10px; min-width:0;">
-                <div class="driver-avatar" style="width:38px;height:38px;min-width:38px;background:rgba(255,255,255,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.1);"><i data-lucide="user"></i></div>
+            <div class="driver-info" style="flex:1.4; display:flex; align-items:center; gap:10px; min-width:0; cursor:pointer;" id="cardDriverInfo_${idx}">
+                <img class="driver-avatar" src="${avatar}" style="width:38px;height:38px;min-width:38px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.1);" />
                 <div style="min-width:0; overflow:hidden;">
                     <div class="driver-name" style="font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${trip.driverName}</div>
                     <div class="digital-clock" style="margin-top:2px;font-size:0.7rem;color:var(--text-muted);">🕒 ${fmt12(isMe ? dayConf.time : (trip.time || '08:30'))}</div>
@@ -668,6 +781,9 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 </div>
             </div>`;
         card.appendChild(top);
+        
+        const drInfo = card.querySelector(`#cardDriverInfo_${idx}`);
+        if (drInfo) drInfo.onclick = () => openDriverProfileViewDialog(dKey);
 
         // Dynamic Direction Label
         const dirWrap = el('div');
@@ -788,15 +904,19 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 const card = el('div', 'glass-card');
                 card.style.cssText = 'background:rgba(15,23,42,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:16px;';
 
+                const pAvatar = (fbData.passengers && fbData.passengers[req.passengerPhone] && fbData.passengers[req.passengerPhone].photoURL) 
+                                ? fbData.passengers[req.passengerPhone].photoURL 
+                                : 'https://www.w3schools.com/howto/img_avatar.png';
+                
+                const maskedPhone = req.passengerPhone.slice(0, 4) + ' ••• •• ' + req.passengerPhone.slice(-2);
+
                 card.innerHTML = `
                   <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                      <div style="display:flex;gap:12px;align-items:center;">
-                          <div style="min-width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg, #3b82f6, #8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:1.2rem;">
-                              ${req.passengerName.charAt(0).toUpperCase()}
-                          </div>
+                      <div style="display:flex;gap:12px;align-items:center;cursor:pointer;" class="passenger-profile-trigger">
+                          <img src="${pAvatar}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--accent-color);" />
                           <div>
                               <div style="color:#fff;font-weight:700;font-size:1.1rem;">${req.passengerName}</div>
-                              <div style="color:var(--text-muted);font-size:0.85rem;margin-top:2px;direction:ltr;text-align:right;">${req.passengerPhone}</div>
+                              <div style="color:var(--text-muted);font-size:0.85rem;margin-top:2px;direction:ltr;">${maskedPhone}</div>
                           </div>
                       </div>
                       <div style="background:rgba(245,158,11,0.2);color:#f59e0b;font-size:0.75rem;font-weight:700;padding:4px 8px;border-radius:12px;white-space:nowrap;">
@@ -816,12 +936,12 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                   </div>
 
                   <div style="display:flex;gap:12px;">
-                      <a href="tel:${req.passengerPhone}" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:12px;padding:12px;display:flex;justify-content:center;align-items:center;gap:8px;text-decoration:none;font-weight:600;transition:0.2s;">
+                      <div style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);border-radius:12px;padding:12px;display:flex;justify-content:center;align-items:center;gap:8px;font-weight:600;cursor:not-allowed;" title="${t('confirmToCall')}">
                           <i data-lucide="phone"></i>
-                      </a>
-                      <a href="https://wa.me/${req.passengerPhone.replace(/^0/, '213')}?text=${encodeURIComponent(t('waMsg') + ' ' + S.driverName())}" target="_blank" style="flex:1;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);color:#25d366;border-radius:12px;padding:12px;display:flex;justify-content:center;align-items:center;gap:8px;text-decoration:none;font-weight:600;transition:0.2s;">
+                      </div>
+                      <div style="flex:1;background:rgba(37,211,102,0.05);border:1px solid rgba(37,211,102,0.1);color:rgba(37,211,102,0.5);border-radius:12px;padding:12px;display:flex;justify-content:center;align-items:center;gap:8px;font-weight:600;cursor:not-allowed;" title="${t('confirmToCall')}">
                           <i data-lucide="message-circle"></i>
-                      </a>
+                      </div>
                   </div>
                   
                   <div style="display:flex;gap:12px;">
@@ -833,6 +953,8 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                       </button>
                   </div>
               `;
+
+                card.querySelector('.passenger-profile-trigger').onclick = () => openPassengerProfileDialog(req.passengerPhone, req.status);
 
                 card.querySelector('.acc-btn').onclick = () => {
                     if (req.id) {
@@ -1339,18 +1461,29 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
                 histItemsRendered++;
                 const pcard = el('div', 'glass-card animate-in');
-                pcard.style.cssText = 'flex-direction:column;gap:8px;padding:16px;margin-bottom:8px;';
+                pcard.style.cssText = 'flex-direction:column;gap:8px;padding:16px;margin-bottom:8px;cursor:pointer;';
+                
+                const isConfirmed = req.status === 'confirmed';
+                const pAvatar = (fbData.passengers && fbData.passengers[req.passengerPhone] && fbData.passengers[req.passengerPhone].photoURL) 
+                                ? fbData.passengers[req.passengerPhone].photoURL 
+                                : 'https://www.w3schools.com/howto/img_avatar.png';
+                const maskedPhone = isConfirmed ? req.passengerPhone : (req.passengerPhone.slice(0, 4) + ' ••• •• ' + req.passengerPhone.slice(-2));
+
                 pcard.innerHTML = `
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div>
-                        <div style="font-weight:700;">${req.passengerName}</div>
-                        <div style="color:var(--text-muted);font-size:0.8rem;">${req.passengerPhone}</div>
-                        <div style="color:var(--accent-color);font-size:0.8rem;margin-top:4px;">${dateRef}</div>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <img src="${pAvatar}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.1);" />
+                        <div>
+                            <div style="font-weight:700;">${req.passengerName}</div>
+                            <div style="color:var(--text-muted);font-size:0.8rem;direction:ltr;">${maskedPhone}</div>
+                            <div style="color:var(--accent-color);font-size:0.8rem;margin-top:2px;">${dateRef}</div>
+                        </div>
                     </div>
                     <div>
                         <span style="font-weight:800; font-size:0.85rem; padding:6px 12px; border-radius:8px; background:${req.status === 'confirmed' ? 'rgba(40,167,69,0.2)' : 'rgba(239,68,68,0.2)'}; color:${req.status === 'confirmed' ? '#28a745' : '#ef4444'};">${req.status.toUpperCase()}</span>
                     </div>
                 </div>`;
+                pcard.onclick = () => openPassengerProfileDialog(req.passengerPhone, req.status);
                 mc.appendChild(pcard);
             });
 
@@ -1367,6 +1500,12 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
 
     function renderProfile() {
+        const role = S.userRole();
+        const curName = role === 'driver' ? S.driverName() : S.passengerName();
+        const curPhone = role === 'driver' ? S.driverPhone() : S.passengerPhone();
+        const photo = role === 'driver' ? S.driverPhotoURL() : S.passengerPhotoURL();
+        const avatar = photo || 'https://www.w3schools.com/howto/img_avatar.png';
+
         mc.innerHTML = `
             <div class="view-header animate-in">
                 <button class="back-btn" id="btnBack"><i data-lucide="arrow-left"></i> ${t('back')}</button>
@@ -1376,29 +1515,65 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
         const wrap = el('div', 'login-container animate-in');
         wrap.innerHTML = `
-            <div class="glass-card" style="flex-direction:column;gap:14px;padding:24px;">
-                <div><input id="profName"  class="glass-input" type="text" value="${S.passengerName()}" placeholder="${t('enterFullName')}" style="padding:14px;" /></div>
-                <div><input id="profPhone" class="glass-input" type="tel"  value="${S.passengerPhone()}" placeholder="0X XX XX XX XX" maxlength="10" style="padding:14px;" /></div>
-                <button id="profSave" class="call-btn">${t('save')}</button>
+            <div class="glass-card" style="flex-direction:column;gap:20px;padding:24px;align-items:center;">
+                <div style="position:relative;cursor:pointer;" id="avatarWrapper">
+                    <img src="${avatar}" id="profAvatarImg" style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:4px solid var(--accent-color);box-shadow:0 8px 20px rgba(0,0,0,0.3);" />
+                    <div style="position:absolute;bottom:0;right:0;background:var(--accent-color);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #0f172a;">
+                        <i data-lucide="camera" style="width:18px;height:18px;color:#fff;"></i>
+                    </div>
+                    <input type="file" id="photoInput" accept="image/*" style="display:none;" />
+                </div>
+
+                <div style="width:100%;display:flex;flex-direction:column;gap:12px;">
+                    <div>
+                        <label style="color:var(--text-muted);font-size:0.75rem;font-weight:700;margin-bottom:6px;display:block;margin-inline-start:4px;">${t('enterFullName')}</label>
+                        <input id="profName"  class="glass-input" type="text" value="${curName}" placeholder="${t('enterFullName')}" style="padding:14px;" />
+                    </div>
+                    <div>
+                        <label style="color:var(--text-muted);font-size:0.75rem;font-weight:700;margin-bottom:6px;display:block;margin-inline-start:4px;">${t('phone')}</label>
+                        <input id="profPhone" class="glass-input" type="tel"  value="${curPhone}" placeholder="0X XX XX XX XX" maxlength="10" style="padding:14px;" disabled />
+                    </div>
+                </div>
+
+                <button id="profSave" class="call-btn" style="margin-top:10px;">${t('save')}</button>
                 <button id="profOut"  class="call-btn" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);">${t('logout')}</button>
             </div>`;
         mc.appendChild(wrap);
+        if (window.lucide) lucide.createIcons();
+
+        const photoInput = document.getElementById('photoInput');
+        document.getElementById('avatarWrapper').onclick = () => photoInput.click();
+        
+        photoInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Show preview immediately
+            document.getElementById('profAvatarImg').src = URL.createObjectURL(file);
+            
+            const userId = role === 'driver' ? S.driverLicense() : S.passengerPhone();
+            const url = await handlePhotoUpload(file, role, userId);
+            if (url) render(); // Re-render to update all instances
+        };
 
         const pNameInp = document.getElementById('profName');
         const pPhoneInp = document.getElementById('profPhone');
         pNameInp.oninput = () => clearError('profName');
-        pPhoneInp.oninput = () => { clearError('profPhone'); pPhoneInp.value = pPhoneInp.value.replace(/\D/g, '').slice(0, 10); };
 
         document.getElementById('profSave').onclick = () => {
             const n = pNameInp.value.trim();
-            const p = pPhoneInp.value.trim();
-            let valid = true;
-            if (!validateName(n)) { showError('profName', t('errorName')); valid = false; }
-            if (!validatePhone(p)) { showError('profPhone', t('errorPhone')); valid = false; }
-            if (!valid) return;
-            localStorage.setItem('passengerName', n);
-            localStorage.setItem('passengerPhone', p);
-            view = 'home'; render();
+            if (!validateName(n)) { showError('profName', t('errorName')); return; }
+            
+            if (role === 'driver') {
+                localStorage.setItem('driverName', n);
+                update(ref(db, `drivers/${S.driverLicense().replace(/\./g, '_')}/profile`), { name: n });
+            } else {
+                localStorage.setItem('passengerName', n);
+                update(ref(db, `passengers/${S.passengerPhone()}`), { name: n });
+            }
+            
+            view = role === 'driver' ? 'driver' : 'home'; 
+            render();
         };
         document.getElementById('profOut').onclick = () => { localStorage.clear(); location.reload(); };
     }

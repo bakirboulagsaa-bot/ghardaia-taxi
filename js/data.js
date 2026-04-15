@@ -81,7 +81,8 @@ export const translations = {
     rating: "Rating",
     driverProfile: "Driver Profile",
     to: "To",
-    headingTo: "Heading to"
+    headingTo: "Heading to",
+    confirmToCall: "Confirm booking to view number"
   },
   fr: {
     appTitle: "TAXI TAWAT",
@@ -165,7 +166,8 @@ export const translations = {
     driverProfile: "Profil Chauffeur",
     to: "Vers",
     headingTo: "En direction de",
-    bookingConflict: "Vous avez déjà une réservation pour ce jour !"
+    bookingConflict: "Vous avez déjà une réservation pour ce jour !",
+    confirmToCall: "Confirmez la réservation pour voir le numéro"
   },
   ar: {
     appTitle: "تاكسي توات",
@@ -250,7 +252,8 @@ export const translations = {
     driverProfile: "الملف الشخصي للسائق",
     to: "إلى",
     toGhardaia: "إلى غرداية",
-    headingTo: "متوجه إلى"
+    headingTo: "متوجه إلى",
+    confirmToCall: "يجب تأكيد الحجز لرؤية الرقم"
   }
 };
 

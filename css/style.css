@@ -855,20 +855,55 @@ html[dir="rtl"] .seat-dropdown {
 .accordion-item.open .accordion-chevron {
   transform: rotate(180deg);
 }
-.accordion-content {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.4s ease, padding 0.4s ease;
-  padding: 0 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 .accordion-item.open .accordion-content {
   max-height: 500px;
   padding: 16px;
   border-top: 1px solid rgba(255,255,255,0.05);
 }
+
+/* ── Trust System & Profile Styles ── */
+.profile-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid var(--accent-color);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  transition: transform 0.3s ease;
+}
+
+.profile-avatar:hover {
+  transform: scale(1.05);
+}
+
+.tawat-modal {
+  animation: modalFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+[title] {
+  position: relative;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  filter: grayscale(1);
+}
+
+.passenger-profile-trigger:hover img {
+  border-color: #fff !important;
+  transform: scale(1.1);
+}
+
+.passenger-profile-trigger img {
+  transition: all 0.2s ease;
+}
+
 /* Trip card action area full-width */
 .trip-card .call-btn { width: 100%; }
 .trip-card a.call-btn { display: flex; }
