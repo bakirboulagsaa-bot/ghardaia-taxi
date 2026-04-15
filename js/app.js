@@ -1262,7 +1262,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                                 </div>
                                 <div>
                                     <div style="font-weight:700;color:#fff;font-size:1.05rem;">${req.passengerName}</div>
-                                    <div style="font-size:0.8rem;color:var(--text-muted);direction:ltr;margin-top:2px;">${maskedPhone}</div>
+                                    <div style="font-size:0.8rem;color:var(--text-muted);direction:ltr;margin-top:2px;">${maskedPhone} &bull; <span style="color:var(--accent-color);font-weight:600;">${req.seatsBooked || 1} ${t('seats')}</span></div>
                                 </div>
                             </div>
                             <div style="color:${isConfirmed ? '#28a745' : '#f59e0b'};font-weight:800;font-size:0.8rem;background:${isConfirmed ? 'rgba(40,167,69,0.1)' : 'rgba(245,158,11,0.1)'};padding:6px 12px;border-radius:12px;">
@@ -1509,7 +1509,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                         <div>
                             <div style="font-weight:700;">${req.passengerName}</div>
                             <div style="color:var(--text-muted);font-size:0.8rem;direction:ltr;">${maskedPhone}</div>
-                            <div style="color:var(--accent-color);font-size:0.8rem;margin-top:2px;">${dateRef}</div>
+                            <div style="color:var(--accent-color);font-size:0.8rem;margin-top:2px;">${dateRef} &bull; <span style="font-weight:600;">${req.seatsBooked || 1} ${t('seats')}</span></div>
                         </div>
                     </div>
                     <div>
