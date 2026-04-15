@@ -855,6 +855,16 @@ html[dir="rtl"] .seat-dropdown {
 .accordion-item.open .accordion-chevron {
   transform: rotate(180deg);
 }
+
+.accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease, padding 0.4s ease;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .accordion-item.open .accordion-content {
   max-height: 500px;
   padding: 16px;
