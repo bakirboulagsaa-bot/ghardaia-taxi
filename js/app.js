@@ -110,18 +110,29 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             return Object.values(fbData.bookings || {});
         },
         // Anti-Conflict Checker Bridge
-        isAvailable: function (dLic, dateIdx) {
-            const w = week();
-            const iso = w[dateIdx].iso;
-            const sps = this.specialDates(dLic);
-            const sp = sps.find(x => x.date === iso);
-            if (sp) return sp.status !== 'full' && sp.seats > 0 && sp.status !== 'off';
-            
-            const sched = this.schedule(dLic);
-            const eff = sched[dateIdx];
-            return eff && eff.status !== 'full' && eff.seats > 0 && eff.status !== 'off';
+        isAvailable: function (dLic, isoDate) {
+            const conf = getDayConfig(dLic, isoDate);
+            if (!conf) return true;
+            return conf.status !== 'full' && conf.seats > 0 && conf.status !== 'off';
         }
     };
+
+    function getDayConfig(dLic, isoDate) {
+        if (!isoDate) return null;
+        
+        // 1. Check Special Dates (Overrides)
+        const sps = S.specialDates(dLic);
+        const sp = sps.find(x => x.date === isoDate);
+        if (sp) return sp;
+        
+        // 2. Fallback to Weekly Schedule
+        // Map ISO date to Day-of-Week (0-6)
+        // IMPORTANT: Our schedule array index 0-6 now maps to Sun-Sat
+        const d = new Date(isoDate);
+        const dayIdx = d.getDay(); 
+        const sched = S.schedule(dLic);
+        return sched[dayIdx];
+    }
 
     function saveSchedule(dLic, sched) {
         if (dLic) {
@@ -130,12 +141,15 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         const key = dLic ? ('tawat_sched_' + dLic) : 'tawat_schedule';
         localStorage.setItem(key, JSON.stringify(sched));
     }
-    function saveSpecialDates(sd) {
-        const dLic = S.driverLicense();
-        if (dLic) {
-            update(ref(db, `drivers/${dLic.replace(/\./g, '_')}`), { specialDates: sd });
+    function saveSpecialDates(dLic, sd) {
+        let finalDlic = dLic || S.driverLicense();
+        if (finalDlic) {
+            update(ref(db, `drivers/${finalDlic.replace(/\./g, '_')}`), { specialDates: sd });
         }
-        localStorage.setItem('tawat_special', JSON.stringify(sd)); 
+        // Also save to local storage for the current logged-in driver if it's them
+        if (!dLic || dLic === S.driverLicense()) {
+            localStorage.setItem('tawat_special', JSON.stringify(sd));
+        }
     }
 
     async function handlePhotoUpload(file, role, userId) {
@@ -281,7 +295,9 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
     // ── View State ───────────────────────────────────────────────────────────
     let view = 'onboarding';
     let selDestId = null;
-    let selDateIdx = null; // Step 2 requires setting this
+    let selDateIso = null; // Professional Calendar uses ISO strings
+    let calYear = new Date().getFullYear();
+    let calMonth = new Date().getMonth();
     let driverActiveTab = 'weekly';
     let driverSearchQuery = '';
 
@@ -669,8 +685,8 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
              <h1 class="view-title">${d ? d.name[window.currentLang] || d.name.en : ''}</h1>`);
         mc.appendChild(hdr);
         document.getElementById('btnBack').onclick = () => { 
-            if (selDateIdx !== null) {
-                selDateIdx = null;
+            if (selDateIso !== null) {
+                selDateIso = null;
                 render();
             } else {
                 view = 'home';
@@ -678,146 +694,168 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             }
         };
 
-        // ─ Resolve schedule for this route ─────────────────────────────────
-        const spDates = S.specialDates();
-        const firstTrip = (trips || []).find(tr => tr.destinationId === selDestId);
-        const routeDriverKey = firstTrip
-            ? (firstTrip.driverLicense || ('mock-' + firstTrip.driverId))
-            : null;
-        const sched = S.schedule(routeDriverKey);
-        const w = week();
-
-        if (selDateIdx === null) {
-            // STEP 2: Show Date Picker Grid
-            const dateTitle = el('h2', 'view-title animate-in', t('selectDate'));
-            dateTitle.style.textAlign = 'center';
-            dateTitle.style.marginTop = '20px';
-            dateTitle.style.marginBottom = '20px';
-            dateTitle.style.color = 'var(--text-muted)';
-            dateTitle.style.fontSize = '1.2rem';
-            mc.appendChild(dateTitle);
-
-            const picker = el('div', 'date-picker-grid animate-in');
-            picker.style.display = 'grid';
-            picker.style.gridTemplateColumns = 'repeat(auto-fill, minmax(90px, 1fr))';
-            picker.style.gap = '16px';
+        if (selDateIso === null) {
+            // STEP 2: Professional Full Calendar
+            const wrapper = el('div', 'calendar-wrapper animate-in');
             
-            w.forEach((day, idx) => {
-                const pill = el('div');
-                const effConf = spDates.find(x => x.date === day.iso) || sched[idx];
-                const status = effConf ? effConf.status : 'available';
-                pill.className = `date-pill state-${status}`;
-                pill.style.padding = '24px 10px';
-                pill.style.minWidth = '0';
-                pill.innerHTML = `<span class="day-name" style="font-size:1rem;color:var(--text-muted);">${t(day.key)}</span><span class="day-num" style="font-size:2rem;margin-top:4px;">${day.num}</span>`;
-                
-                pill.onclick = () => { 
-                    selDateIdx = idx; 
-                    render(); 
-                };
-                picker.appendChild(pill);
+            const monthNames = {
+                en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+                ar: ["جانفي", "فيفري", "مارس", "أفريل", "ماي", "جوان", "جويلية", "أوت", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
+                fr: ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+            };
+
+            const calHdr = el('div', 'calendar-header');
+            calHdr.innerHTML = `
+                <button class="icon-btn" id="prevMonth"><i data-lucide="chevron-left"></i></button>
+                <div class="calendar-month-title">${(monthNames[window.currentLang] || monthNames.en)[calMonth]} ${calYear}</div>
+                <button class="icon-btn" id="nextMonth"><i data-lucide="chevron-right"></i></button>
+            `;
+            wrapper.appendChild(calHdr);
+
+            const grid = el('div', 'calendar-grid');
+            const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            weekdays.forEach(wd => {
+                grid.appendChild(el('div', 'cal-weekday', t('day' + wd).charAt(0)));
             });
-            mc.appendChild(picker);
+
+            const firstDay = new Date(calYear, calMonth, 1).getDay();
+            const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+            const today = new Date();
+            today.setHours(0,0,0,0);
+
+            // Empty slots for start of month
+            for (let i = 0; i < firstDay; i++) {
+                grid.appendChild(el('div', 'cal-day empty'));
+            }
+
+            for (let dd = 1; dd <= daysInMonth; dd++) {
+                const dateObj = new Date(calYear, calMonth, dd);
+                const iso = dateObj.toISOString().split('T')[0];
+                const isPast = dateObj < today;
+                const isToday = dateObj.getTime() === today.getTime();
+                
+                // Availability Highlighting Logic
+                const hasTrips = Object.values(fbData.drivers).some(driver => {
+                    if (!driver.profile || driver.profile.destId !== selDestId) return false;
+                    const conf = getDayConfig(driver.profile.license, iso);
+                    return conf && conf.status === 'available' && conf.seats > 0;
+                }) || (trips || []).some(tr => tr.destinationId === selDestId); // Simple fallback for static trips
+
+                const dayEl = el('div', `cal-day${isPast ? ' past' : ''}${isToday ? ' today' : ''}${hasTrips && !isPast ? ' has-trips' : ''}`, dd);
+                if (!isPast) {
+                    dayEl.onclick = () => {
+                        selDateIso = iso;
+                        render();
+                    };
+                }
+                grid.appendChild(dayEl);
+            }
+            wrapper.appendChild(grid);
+            mc.appendChild(wrapper);
+
+            document.getElementById('prevMonth').onclick = () => {
+                calMonth--;
+                if (calMonth < 0) { calMonth = 11; calYear--; }
+                render();
+            };
+            document.getElementById('nextMonth').onclick = () => {
+                calMonth++;
+                if (calMonth > 11) { calMonth = 0; calYear++; }
+                render();
+            };
+
             return;
         }
 
         // STEP 3: Results
-        // horizontal date picker container
-        const picker = el('div', 'date-picker-container animate-in');
-        w.forEach((day, idx) => {
-            const pill = el('div');
-            const effConf = spDates.find(x => x.date === day.iso) || sched[idx];
-            const status = effConf ? effConf.status : 'available';
-            pill.className = `date-pill${selDateIdx === idx ? ' active' : ''} state-${status}`;
-            pill.innerHTML = `<span class="day-name">${t(day.key)}</span><span class="day-num">${day.num}</span>`;
-            if (status !== 'off' && effConf) {
-                const tag = el('span', '', `🕒 ${fmt12(effConf.time)}`);
-                tag.style.cssText = 'font-size:0.6rem;color:var(--text-muted);margin-top:2px;';
-                pill.appendChild(tag);
-            }
-            pill.onclick = () => { selDateIdx = idx; render(); };
-            picker.appendChild(pill);
+        const selectedDateObj = new Date(selDateIso);
+        const dateStr = selectedDateObj.toLocaleDateString(window.currentLang === 'ar' ? 'ar-DZ' : (window.currentLang === 'fr' ? 'fr-FR' : 'en-US'), {
+            weekday: 'long', day: 'numeric', month: 'long'
         });
-        mc.appendChild(picker);
 
-        // Trip cards filtered by day status
-        const effConf = spDates.find(x => x.date === w[selDateIdx].iso) || sched[selDateIdx];
-        const dayStatus = effConf ? effConf.status : 'available';
+        const dateHeader = el('div', 'animate-in', `<div style="text-align:center; padding:10px; background:rgba(255,255,255,0.05); border-radius:12px; margin-bottom:16px; border:var(--glass-border);"><span style="color:var(--accent-color); font-weight:800;">${dateStr}</span></div>`);
+        mc.appendChild(dateHeader);
+
         const list = el('div', 'card-list animate-in');
-
         const noTripsMsg = window.currentLang === 'ar' ? 'لا توجد رحلات متاحة لهذا الاختيار' :
                            window.currentLang === 'fr' ? 'Aucun trajet disponible pour cette sélection' :
                            'No trips available for this selection';
         const noTripsHtml = `<div style="text-align:center;color:var(--text-muted);padding:40px 20px;background:var(--card-bg);border-radius:16px;border:var(--glass-border);margin-top:10px;"><i data-lucide="car-front" style="width:48px;height:48px;display:block;margin:0 auto 16px;opacity:0.5;"></i><p style="font-size:1.1rem;font-weight:600;">${noTripsMsg}</p></div>`;
 
+        // Combine Static Trips and Firebase Drivers
+        const staticTrips = (trips || []).filter(tr => tr.destinationId === selDestId);
+        const firebaseDrivers = Object.values(fbData.drivers)
+            .filter(d => d.profile && d.profile.destId === selDestId)
+            .map(d => ({
+                ...d.profile,
+                id: d.profile.license,
+                driverLicense: d.profile.license,
+                driverName: d.profile.name,
+                phone: d.profile.phone,
+                isFirebase: true
+            }));
 
-        if (dayStatus === 'off') {
-            list.innerHTML = noTripsHtml;
-        } else {
-            // Combine Static Trips and Firebase Drivers
-            const staticTrips = (trips || []).filter(tr => tr.destinationId === selDestId);
-            const firebaseDrivers = Object.values(fbData.drivers)
-                .filter(d => d.profile && d.profile.destId === selDestId)
-                .map(d => ({
-                    ...d.profile,
-                    id: d.profile.license,
-                    driverLicense: d.profile.license,
-                    driverName: d.profile.name,
-                    phone: d.profile.phone,
-                    isFirebase: true
-                }));
+        const raw = [
+            ...staticTrips.filter(st => !firebaseDrivers.some(fd => fd.phone === st.phone || fd.driverLicense === st.driverLicense)),
+            ...firebaseDrivers
+        ];
 
-            // Filter out static trips that have a firebase equivalent (by license or phone)
-            const raw = [
-                ...staticTrips.filter(st => !firebaseDrivers.some(fd => fd.phone === st.phone || fd.driverLicense === st.driverLicense)),
-                ...firebaseDrivers
-            ];
+        const dl = S.driverLicense(), dd = S.driverDestId();
+        const final = raw.filter(tr => {
+            const dKey = tr.driverLicense || ('mock-' + (tr.driverId || tr.id));
+            const dayCfg = getDayConfig(dKey, selDateIso);
+            if (!dayCfg || dayCfg.status === 'off') return false;
+            
+            // Auto-Archive for today
+            const todayIso = new Date().toISOString().split('T')[0];
+            if (selDateIso === todayIso && isPastTrip(dayCfg.time)) return false;
+            
+            return true;
+        }).sort((a,b) => {
+            if (a.id === '__me__') return -1;
+            if (b.id === '__me__') return 1;
+            return 0;
+        });
 
-            // If current user is a driver on this route, show them first
-            const dl = S.driverLicense(), dd = S.driverDestId();
-            const final = raw.filter(tr => {
-                const dKey = tr.driverLicense || ('mock-' + (tr.driverId || tr.id));
-                const currentSched = S.schedule(dKey);
-                const dayCfg = spDates.find(x => x.date === w[selDateIdx].iso) || currentSched[selDateIdx];
-                if (!dayCfg || dayCfg.status === 'off') return false;
-                
-                // Auto-Archive: Filter out past trips for today
-                if (isPast(dayCfg.time, selDateIdx)) return false;
-                
-                return true;
-            }).sort((a,b) => {
-                if (a.id === '__me__') return -1;
-                if (b.id === '__me__') return 1;
-                return 0;
-            });
-
-            if (S.userRole() === 'driver' && dd === selDestId && dl) {
-                // Check if already in raw
-                if (!raw.find(r => r.driverLicense === dl)) {
+        // Add "me" if I am a driver on this route and not already there
+        if (S.userRole() === 'driver' && dd === selDestId && dl) {
+            if (!final.find(r => r.driverLicense === dl)) {
+                const myDayCfg = getDayConfig(dl, selDateIso);
+                if (myDayCfg && myDayCfg.status !== 'off') {
                     final.unshift({ id: '__me__', driverName: S.driverName(), driverLicense: dl, phone: S.driverPhone() });
                 }
             }
-            
-            if (final.length === 0) {
-                list.innerHTML = noTripsHtml;
-            } else {
-                final.forEach((trip, i) => {
-                    const dKey = trip.driverLicense || ('mock-' + (trip.driverId || trip.id));
-                    const dConf = spDates.find(x => x.date === w[selDateIdx].iso) || S.schedule(dKey)[selDateIdx];
-                    const card = createTripCard(trip, i, trip.id === '__me__', dConf);
-                    if (card) list.appendChild(card);
-                });
-            }
+        }
+        
+        if (final.length === 0) {
+            list.innerHTML = noTripsHtml;
+        } else {
+            final.forEach((trip, i) => {
+                const dKey = trip.driverLicense || ('mock-' + (trip.driverId || trip.id));
+                const dayConf = getDayConfig(dKey, selDateIso);
+                const card = createTripCard(trip, i, trip.id === '__me__', dayConf);
+                if (card) list.appendChild(card);
+            });
         }
         mc.appendChild(list);
     }
 
+    function isPastTrip(timeStr) {
+        if (!timeStr) return false;
+        const now = new Date();
+        const [h, m] = timeStr.split(':').map(Number);
+        const tripTime = new Date();
+        tripTime.setHours(h, m, 0, 0);
+        return now > tripTime;
+    }
+
     function createTripCard(trip, idx, isMe, dayConf) {
-        // FIX: Static trips in data.js use driverId not driverLicense.
-        // Normalise to a reliable key for schedule and booking lookups.
         const dKey = trip.driverLicense || ('mock-' + (trip.driverId || trip.id));
         const bks = S.bookings();
-        const myBk = !isMe && bks.find(b => b.driverLicense === dKey && b.dateIndex === selDateIdx && b.passengerPhone === S.passengerPhone());
+        const myBk = !isMe && bks.find(b => b.driverLicense === dKey && b.dateIso === selDateIso && b.passengerPhone === S.passengerPhone());
+        
+        if (!dayConf) return null; // Defensive check
+
 
         // Guard against a missing dayConf (e.g. no schedule data at all)
         if (!dayConf) return null;
@@ -890,32 +928,32 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 bookBtn.onclick = () => {
                     // Double-Booking Prevention
                     const myBks = S.bookings();
-                    const conflict = myBks.find(b => b.passengerPhone === S.passengerPhone() && b.dateIndex === selDateIdx && b.status !== 'cancelled');
+                    const conflict = myBks.find(b => b.passengerPhone === S.passengerPhone() && b.dateIso === selDateIso && b.status !== 'cancelled');
                     if (conflict) {
                         alert(translations[window.currentLang].bookingConflict || "You already have a booking for this day!");
                         return;
                     }
 
                     // Conflict Resolution & Architecture Fix (Real-Time Availability Check)
-                    if (!S.isAvailable(dKey, selDateIdx)) {
+                    if (!S.isAvailable(dKey, selDateIso)) {
                         alert(t('statusFull'));
                         render();
                         return;
                     }
 
                     const dLicKey = dKey.replace(/\./g, '_');
-                    const w = week();
-                    const iso = w[selDateIdx].iso;
                     const sps = S.specialDates(dKey);
-                    const sp = sps.find(x => x.date === iso);
+                    const sp = sps.find(x => x.date === selDateIso);
 
                     if (sp) {
                         sp.seats--;
                         if (sp.seats <= 0) { sp.seats = 0; sp.status = 'full'; }
-                        saveSpecialDates(sps);
+                        saveSpecialDates(dKey, sps);
                     } else {
+                        const d = new Date(selDateIso);
+                        const dayIdx = d.getDay(); 
                         const sched = S.schedule(dKey);
-                        const activeSched = sched[selDateIdx];
+                        const activeSched = sched[dayIdx];
                         activeSched.seats--;
                         if (activeSched.seats <= 0) { activeSched.seats = 0; activeSched.status = 'full'; }
                         saveSchedule(dKey, sched);
@@ -928,7 +966,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                         driverPhone: trip.phone || '',
                         passengerName: S.passengerName(), 
                         passengerPhone: S.passengerPhone(),
-                        dateIndex: selDateIdx, 
+                        dateIso: selDateIso, 
                         status: 'pending',
                         timestamp: Date.now()
                     };
@@ -1038,12 +1076,18 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                         update(ref(db, `bookings/${req.id}`), { status: 'cancelled' });
                         
                         // Re-increment seats if booking is declined/cancelled
-                        const dLicKey = dLic.replace(/\./g, '_');
-                        const activeSched = sched[req.dateIndex] || sched[0];
-                        activeSched.seats++;
-                        if (activeSched.status === 'full') activeSched.status = 'available';
-                        
-                        saveSchedule(dLic, sched);
+                        const conf = getDayConfig(dLic, req.dateIso);
+                        if (conf) {
+                            conf.seats++;
+                            if (conf.status === 'full') conf.status = 'available';
+                            
+                            // Save correctly (either Special or Weekly)
+                            const sps = S.specialDates(dLic);
+                            const sp = sps.find(x => x.date === req.dateIso);
+                            if (sp) saveSpecialDates(dLic, sps);
+                            else saveSchedule(dLic, sched);
+                        }
+
                         document.body.removeChild(dialog);
                         render();
                     }
@@ -1330,13 +1374,12 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
 
         // ── Tabs Logic ──
         if (driverActiveTab === 'today') {
-            const w = week();
-            const todayIso = w[0].iso;
-            const effConf = spDates.find(x => x.date === todayIso) || sched[0];
+            const todayIso = new Date().toISOString().split('T')[0];
+            const effConf = getDayConfig(dLic, todayIso);
 
             // Render today's route
             let todayItemsRendered = 0;
-            if (!isPast(effConf.time, 0) && (`${t(w[0].key)} ${w[0].num}`.toLowerCase().includes(q) || dDestName.toLowerCase().includes(q) || dateMatches(todayIso, q))) {
+            if (effConf && !isPastTrip(effConf.time) && (dDestName.toLowerCase().includes(q) || dateMatches(todayIso, q))) {
                 todayItemsRendered++;
                 const curColor = bgColors[effConf.status] || 'rgba(0,0,0,0.3)';
                 const content = `
@@ -1371,7 +1414,13 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                         <input type="time" class="time-input-premium" disabled value="${effConf.time}" style="width:160px;text-align:center;border-color:rgba(255,255,255,0.1);" />
                     </div>
                 </div>`;
-                const acc = createAccordion('today_route', `${t(w[0].key)} ${w[0].num} (${t('todayTrips')})`, `🕒 ${fmt12(effConf.time)}`, content);
+                const weekDaysLong = {
+                    en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+                    ar: ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
+                    fr: ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
+                };
+                const dayName = (weekDaysLong[window.currentLang] || weekDaysLong.en)[new Date().getDay()];
+                const acc = createAccordion('today_route', `${dayName} (${t('todayTrips')})`, `🕒 ${fmt12(effConf.time)}`, content);
                 acc.classList.add('open'); // Today is expanded by default
                 mc.appendChild(acc);
             }
@@ -1379,7 +1428,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             // Render passenger manifest strictly below today's route module
             if (todayItemsRendered > 0) {
                 let todayReqsRendered = 0;
-                const reqs = allBks.filter(b => b.driverLicense === dLic && (b.status === 'pending' || b.status === 'confirmed') && b.dateIndex === 0);
+                const reqs = allBks.filter(b => b.driverLicense === dLic && (b.status === 'pending' || b.status === 'confirmed') && b.dateIso === todayIso);
                 
                 const manifestSection = el('div', 'manifest-section animate-in');
                 manifestSection.style.cssText = 'margin-top:24px; display:flex; flex-direction:column; gap:12px;';
@@ -1468,17 +1517,18 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                         if (!spDates.find(x => x.date === dateVal)) {
                             spDates.push({ date: dateVal, status: 'off', seats: 0, time: '08:00' });
                             spDates.sort((a, b) => a.date.localeCompare(b.date));
-                            saveSpecialDates(spDates);
+                            saveSpecialDates(dLic, spDates);
                             render();
                         }
                     };
                 }
             }, 0);
 
-            week().forEach((day, idx) => {
+            // Fixed Sun-Sat Weekly Grid
+            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach((dayKey, idx) => {
                 const cfg = sched[idx];
-                const titleStr = `${t(day.key)} ${day.num}`;
-                if (!titleStr.toLowerCase().includes(q) && !dDestName.toLowerCase().includes(q) && !dateMatches(day.iso, q)) return;
+                const titleStr = t('day' + dayKey);
+                if (!titleStr.toLowerCase().includes(q) && !dDestName.toLowerCase().includes(q)) return;
                 weeklyItemsRendered++;
 
                 const curColor = bgColors[cfg.status] || 'rgba(0,0,0,0.3)';
@@ -1600,20 +1650,20 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                     const acc = createAccordion(`sp_${idx}`, cfg.date, `🕒 ${fmt12(cfg.time)}`, content);
                     setTimeout(() => {
                         const timeInp = document.getElementById(`spTim${idx}`);
-                        if (timeInp) timeInp.onchange = (e) => { spDates[idx].time = e.target.value; saveSpecialDates(spDates); };
+                        if (timeInp) timeInp.onchange = (e) => { spDates[idx].time = e.target.value; saveSpecialDates(dLic, spDates); };
                         const dirInp = document.getElementById(`spDir${idx}`);
-                        if (dirInp) dirInp.onchange = (e) => { spDates[idx].direction = e.target.value; saveSpecialDates(spDates); render(); };
+                        if (dirInp) dirInp.onchange = (e) => { spDates[idx].direction = e.target.value; saveSpecialDates(dLic, spDates); render(); };
                         const seatInp = document.getElementById(`spSeat${idx}`);
-                        if (seatInp) seatInp.onchange = (e) => { spDates[idx].seats = Math.max(1, Math.min(8, parseInt(e.target.value) || 1)); saveSpecialDates(spDates); };
+                        if (seatInp) seatInp.onchange = (e) => { spDates[idx].seats = Math.max(1, Math.min(8, parseInt(e.target.value) || 1)); saveSpecialDates(dLic, spDates); };
                         const statSel = document.getElementById(`spStat${idx}`);
                         if (statSel) statSel.onchange = (e) => {
                             spDates[idx].status = e.target.value;
                             if (e.target.value === 'full') spDates[idx].seats = 0;
                             if (e.target.value === 'available' && spDates[idx].seats === 0) spDates[idx].seats = 8;
-                            saveSpecialDates(spDates); render();
+                            saveSpecialDates(dLic, spDates); render();
                         };
                         const delBtn = document.getElementById(`spDel${idx}`);
-                        if (delBtn) delBtn.onclick = () => { spDates.splice(idx, 1); saveSpecialDates(spDates); render(); };
+                        if (delBtn) delBtn.onclick = () => { spDates.splice(idx, 1); saveSpecialDates(dLic, spDates); render(); };
                     }, 0);
                     mc.appendChild(acc);
                 });
@@ -1630,9 +1680,8 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             let histItemsRendered = 0;
             const hist = allBks.filter(b => b.driverLicense === dLic && (b.status === 'confirmed' || b.status === 'cancelled'));
             hist.forEach(req => {
-                const w = week();
-                const dateRef = w[req.dateIndex] ? `${t(w[req.dateIndex].key)} ${w[req.dateIndex].num}` : t('pastDate');
-                const dateIso = w[req.dateIndex] ? w[req.dateIndex].iso : '';
+                const dateIso = req.dateIso || '';
+                const dateRef = dateIso ? new Date(dateIso).toLocaleDateString(window.currentLang === 'ar' ? 'ar-DZ' : 'fr-FR') : t('pastDate');
                 if (!dateRef.toLowerCase().includes(q) && !req.passengerName.toLowerCase().includes(q) && !dateMatches(dateIso, q)) return;
 
                 histItemsRendered++;

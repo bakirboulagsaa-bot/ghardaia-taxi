@@ -635,6 +635,97 @@ html[dir="rtl"] .glass-input {
   font-weight: 800;
 }
 
+/* Professional Calendar Premium UI */
+.calendar-wrapper {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(16px);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 8px;
+}
+.calendar-month-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+  text-transform: capitalize;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+.cal-weekday {
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  padding-bottom: 8px;
+  text-transform: uppercase;
+}
+.cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  position: relative;
+}
+.cal-day.empty { cursor: default; }
+.cal-day:not(.empty):not(.past):hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+.cal-day.today {
+  color: var(--accent-color);
+  font-weight: 900;
+}
+.cal-day.past {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.cal-day.selected {
+  background: var(--primary-color);
+  color: #fff;
+  box-shadow: 0 6px 15px rgba(37, 99, 235, 0.4);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+  z-index: 2;
+}
+.cal-day.has-trips::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  width: 4px;
+  height: 4px;
+  background: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--success);
+}
+.cal-day.busy::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  width: 4px;
+  height: 4px;
+  background: var(--danger);
+  border-radius: 50%;
+}
+
+
 /* Digital Clock Style */
 .digital-clock {
   display: inline-flex;
