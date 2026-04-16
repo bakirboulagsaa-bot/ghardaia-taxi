@@ -734,14 +734,17 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 const isPast = dateObj < today;
                 const isToday = dateObj.getTime() === today.getTime();
                 
-                // Availability Highlighting Logic
+                // Availability Highlighting Logic: Check for any driver on this route available on this day
                 const hasTrips = Object.values(fbData.drivers).some(driver => {
                     if (!driver.profile || driver.profile.destId !== selDestId) return false;
                     const conf = getDayConfig(driver.profile.license, iso);
                     return conf && conf.status === 'available' && conf.seats > 0;
-                }) || (trips || []).some(tr => tr.destinationId === selDestId); // Simple fallback for static trips
+                }) || (trips || []).some(tr => tr.destinationId === selDestId);
 
                 const dayEl = el('div', `cal-day${isPast ? ' past' : ''}${isToday ? ' today' : ''}${hasTrips && !isPast ? ' has-trips' : ''}`, dd);
+                dayEl.style.animationDelay = `${(dd % 7) * 0.03 + Math.floor(dd / 7) * 0.05}s`;
+                dayEl.classList.add('animate-in');
+                
                 if (!isPast) {
                     dayEl.onclick = () => {
                         selDateIso = iso;
