@@ -630,7 +630,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         const hdr = el('div', 'view-header animate-in');
         hdr.style.justifyContent = 'space-between';
         hdr.innerHTML = `
-        <h2 class="view-title">${t('destinations')}</h2>
+        <h2 class="view-title">${t('destinations')} <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:8px;margin-inline-start:8px;vertical-align:middle;color:var(--accent-color);">${t('step')} 1/3</span></h2>
         <div style="display:flex;gap:10px;align-items:center;">
             <input type="file" id="passengerPhotoInput" accept="image/*" style="display:none;" />
             <div id="passengerAvatarBtn" style="width:40px;height:40px;border-radius:50%;overflow:hidden;border:2px solid var(--accent-color);cursor:pointer;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;" title="${t('addPhoto')}">
@@ -670,7 +670,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                     <div class="route-name">${d.name[window.currentLang] || d.name.en}</div>
                 </div>
                 <i data-lucide="chevron-right"></i>`;
-            card.onclick = () => { selDestId = d.id; selDateIdx = null; view = 'trips'; render(); };
+            card.onclick = () => { selDestId = d.id; selDateIso = null; view = 'trips'; render(); };
             list.appendChild(card);
         });
         mc.appendChild(list);
@@ -682,7 +682,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         // ── Header ──
         const hdr = el('div', 'view-header animate-in',
             `<button class="back-btn" id="btnBack"><i data-lucide="arrow-left"></i> ${t('back')}</button>
-             <h1 class="view-title">${d ? d.name[window.currentLang] || d.name.en : ''}</h1>`);
+             <h1 class="view-title">${d ? d.name[window.currentLang] || d.name.en : ''} <span style="font-size:0.8rem;background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:8px;margin-inline-start:8px;vertical-align:middle;color:var(--accent-color);">${selDateIso === null ? t('step') + ' 2/3' : t('step') + ' 3/3'}</span></h1>`);
         mc.appendChild(hdr);
         document.getElementById('btnBack').onclick = () => { 
             if (selDateIso !== null) {
@@ -783,7 +783,11 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         const noTripsMsg = window.currentLang === 'ar' ? 'لا توجد رحلات متاحة لهذا الاختيار' :
                            window.currentLang === 'fr' ? 'Aucun trajet disponible pour cette sélection' :
                            'No trips available for this selection';
-        const noTripsHtml = `<div style="text-align:center;color:var(--text-muted);padding:40px 20px;background:var(--card-bg);border-radius:16px;border:var(--glass-border);margin-top:10px;"><i data-lucide="car-front" style="width:48px;height:48px;display:block;margin:0 auto 16px;opacity:0.5;"></i><p style="font-size:1.1rem;font-weight:600;">${noTripsMsg}</p></div>`;
+        const noTripsHtml = `<div style="text-align:center;color:var(--text-muted);padding:48px 20px;background:rgba(255,255,255,0.02);border-radius:24px;border:1px dashed rgba(255,255,255,0.1);margin-top:10px;">
+                                <i data-lucide="calendar-x" style="width:56px;height:56px;display:block;margin:0 auto 16px;opacity:0.6;color:var(--danger);"></i>
+                                <p style="font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:8px;">${noTripsMsg}</p>
+                                <p style="font-size:0.85rem;opacity:0.7;">${window.currentLang === 'ar' ? 'يرجى اختيار تاريخ آخر أو وجهة أخرى' : 'Try another date or destination'}</p>
+                             </div>`;
 
         // Combine Static Trips and Firebase Drivers
         const staticTrips = (trips || []).filter(tr => tr.destinationId === selDestId);
