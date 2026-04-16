@@ -1162,6 +1162,44 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         }
 
         // ── Accordion Helper ──
+        function openAccordion(content) {
+            content.style.height = '0';
+            content.style.opacity = '0';
+            content.style.overflow = 'hidden';
+            content.style.display = 'block';
+            // Force reflow
+            content.getBoundingClientRect();
+            const targetH = content.scrollHeight;
+            content.style.transition = 'height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease';
+            content.style.height = targetH + 'px';
+            content.style.opacity = '1';
+            content.addEventListener('transitionend', function onEnd(e) {
+                if (e.propertyName === 'height') {
+                    content.style.height = 'auto';
+                    content.style.overflow = '';
+                    content.removeEventListener('transitionend', onEnd);
+                }
+            });
+        }
+
+        function closeAccordion(content) {
+            const curH = content.scrollHeight;
+            content.style.height = curH + 'px';
+            content.style.overflow = 'hidden';
+            // Force reflow
+            content.getBoundingClientRect();
+            content.style.transition = 'height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease';
+            content.style.height = '0';
+            content.style.opacity = '0';
+            content.addEventListener('transitionend', function onEnd(e) {
+                if (e.propertyName === 'height') {
+                    content.style.display = 'none';
+                    content.style.overflow = '';
+                    content.removeEventListener('transitionend', onEnd);
+                }
+            });
+        }
+
         function createAccordion(id, mainTitle, subTitle, contentHTML) {
             const item = el('div', 'accordion-item animate-in');
             item.innerHTML = `
@@ -1172,19 +1210,31 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 </div>
                 <i data-lucide="chevron-down" class="accordion-chevron"></i>
             </div>
-            <div class="accordion-content" id="accCtx_${id}">
-                <div class="accordion-inner-wrapper" style="display:flex; flex-direction:column; gap:12px; min-height:0; overflow:hidden;">
+            <div class="accordion-content" id="accCtx_${id}" style="display:none;">
+                <div style="display:flex; flex-direction:column; gap:12px; padding:16px;">
                     ${contentHTML}
                 </div>
             </div>
         `;
             item.querySelector('.accordion-header').onclick = () => {
-                const wasOpen = item.classList.contains('open');
-                // Close all other accordions
-                document.querySelectorAll('.accordion-item').forEach(el => el.classList.remove('open'));
-                
-                if (!wasOpen) {
+                const isOpen = item.classList.contains('open');
+                const content = item.querySelector('.accordion-content');
+
+                // Close all other open accordions
+                document.querySelectorAll('.accordion-item.open').forEach(other => {
+                    if (other !== item) {
+                        other.classList.remove('open');
+                        const otherContent = other.querySelector('.accordion-content');
+                        if (otherContent) closeAccordion(otherContent);
+                    }
+                });
+
+                if (isOpen) {
+                    item.classList.remove('open');
+                    closeAccordion(content);
+                } else {
                     item.classList.add('open');
+                    openAccordion(content);
                 }
             };
             return item;

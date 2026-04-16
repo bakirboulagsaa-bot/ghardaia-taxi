@@ -858,16 +858,10 @@ html[dir="rtl"] .seat-dropdown {
 }
 
 .accordion-content {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.5s ease-in-out, padding 0.4s ease, opacity 0.4s ease;
-  padding: 0 16px;
-  opacity: 0;
+  /* Height/opacity animated via JS for pixel-perfect smoothness */
+  border-top: 0;
 }
-.accordion-item.open .accordion-content {
-  max-height: 1000px;
-  padding: 16px;
-  opacity: 1;
+.accordion-item.open > .accordion-content {
   border-top: 1px solid rgba(255,255,255,0.05);
 }
 
