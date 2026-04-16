@@ -1177,7 +1177,13 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             </div>
         `;
             item.querySelector('.accordion-header').onclick = () => {
-                item.classList.toggle('open');
+                const wasOpen = item.classList.contains('open');
+                // Close all other accordions
+                document.querySelectorAll('.accordion-item').forEach(el => el.classList.remove('open'));
+                
+                if (!wasOpen) {
+                    item.classList.add('open');
+                }
                 if (window.lucide) lucide.createIcons();
             };
             return item;

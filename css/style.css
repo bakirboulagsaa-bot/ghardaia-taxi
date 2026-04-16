@@ -857,16 +857,13 @@ html[dir="rtl"] .seat-dropdown {
 }
 
 .accordion-content {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.4s ease, padding 0.4s ease;
+  display: none;
   padding: 0 16px;
-  display: flex;
   flex-direction: column;
   gap: 12px;
 }
 .accordion-item.open .accordion-content {
-  max-height: 500px;
+  display: flex;
   padding: 16px;
   border-top: 1px solid rgba(255,255,255,0.05);
 }
