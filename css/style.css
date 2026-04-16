@@ -857,13 +857,14 @@ html[dir="rtl"] .seat-dropdown {
 }
 
 .accordion-content {
-  display: none;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease, padding 0.3s ease;
   padding: 0 16px;
-  flex-direction: column;
-  gap: 12px;
+  overflow: hidden;
 }
 .accordion-item.open .accordion-content {
-  display: flex;
+  grid-template-rows: 1fr;
   padding: 16px;
   border-top: 1px solid rgba(255,255,255,0.05);
 }

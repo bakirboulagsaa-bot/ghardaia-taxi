@@ -1173,7 +1173,9 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 <i data-lucide="chevron-down" class="accordion-chevron"></i>
             </div>
             <div class="accordion-content" id="accCtx_${id}">
-                ${contentHTML}
+                <div class="accordion-inner-wrapper" style="display:flex; flex-direction:column; gap:12px; min-height:0; overflow:hidden;">
+                    ${contentHTML}
+                </div>
             </div>
         `;
             item.querySelector('.accordion-header').onclick = () => {
@@ -1184,7 +1186,6 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 if (!wasOpen) {
                     item.classList.add('open');
                 }
-                if (window.lucide) lucide.createIcons();
             };
             return item;
         }
