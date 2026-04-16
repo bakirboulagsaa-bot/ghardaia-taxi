@@ -281,7 +281,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
     // ── View State ───────────────────────────────────────────────────────────
     let view = 'onboarding';
     let selDestId = null;
-    let selDateIdx = 0;
+    let selDateIdx = null; // Step 2 requires setting this
     let driverActiveTab = 'weekly';
     let driverSearchQuery = '';
 
@@ -610,14 +610,39 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
     }
 
     function renderHome() {
+        const pPhoto = S.passengerPhotoURL();
         const hdr = el('div', 'view-header animate-in');
         hdr.style.justifyContent = 'space-between';
         hdr.innerHTML = `
         <h2 class="view-title">${t('destinations')}</h2>
-        <button class="back-btn" id="btnHomeBack" style="font-size: 0.9rem;"><i data-lucide="arrow-left"></i> ${t('back')}</button>
+        <div style="display:flex;gap:10px;align-items:center;">
+            <input type="file" id="passengerPhotoInput" accept="image/*" style="display:none;" />
+            <div id="passengerAvatarBtn" style="width:40px;height:40px;border-radius:50%;overflow:hidden;border:2px solid var(--accent-color);cursor:pointer;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;" title="${t('addPhoto')}">
+                ${pPhoto ? `<img src="${pPhoto}" style="width:100%;height:100%;object-fit:cover;"/>` : `<i data-lucide="user" style="width:22px;height:22px;color:#fff;"></i>`}
+            </div>
+            <button class="back-btn" id="btnHomeBack" style="font-size: 0.9rem;"><i data-lucide="arrow-left"></i> ${t('back')}</button>
+        </div>
     `;
         mc.appendChild(hdr);
         document.getElementById('btnHomeBack').onclick = () => { view = 'onboarding'; render(); };
+        
+        // Wire passenger photo upload
+        const pInput = document.getElementById('passengerPhotoInput');
+        const pAvBtn = document.getElementById('passengerAvatarBtn');
+        if (pInput && pAvBtn) {
+            pAvBtn.onclick = () => pInput.click();
+            pInput.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                pAvBtn.innerHTML = '<div style="font-size:0.5rem;color:#fff;text-align:center;">...</div>';
+                const url = await handlePhotoUpload(file, 'passenger', S.passengerPhone());
+                if (url) {
+                    localStorage.setItem('passengerPhotoURL', url);
+                    pAvBtn.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;"/>`;
+                }
+            };
+        }
+
 
         const list = el('div', 'card-list');
         (destinationsList || []).forEach((d, i) => {
@@ -629,7 +654,7 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                     <div class="route-name">${d.name[window.currentLang] || d.name.en}</div>
                 </div>
                 <i data-lucide="chevron-right"></i>`;
-            card.onclick = () => { selDestId = d.id; view = 'trips'; render(); };
+            card.onclick = () => { selDestId = d.id; selDateIdx = null; view = 'trips'; render(); };
             list.appendChild(card);
         });
         mc.appendChild(list);
@@ -643,22 +668,61 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             `<button class="back-btn" id="btnBack"><i data-lucide="arrow-left"></i> ${t('back')}</button>
              <h1 class="view-title">${d ? d.name[window.currentLang] || d.name.en : ''}</h1>`);
         mc.appendChild(hdr);
-        document.getElementById('btnBack').onclick = () => { view = 'home'; render(); };
+        document.getElementById('btnBack').onclick = () => { 
+            if (selDateIdx !== null) {
+                selDateIdx = null;
+                render();
+            } else {
+                view = 'home';
+                render();
+            }
+        };
 
         // ─ Resolve schedule for this route ─────────────────────────────────
-        // FIX: Declare spDates and sched in renderTrips scope so they are
-        // available for the trip-card section below (was previously undefined).
         const spDates = S.specialDates();
         const firstTrip = (trips || []).find(tr => tr.destinationId === selDestId);
-        // Use the driver's stored license key for schedule lookups.
-        // Static trip data uses driverId; registered drivers use driverLicense.
         const routeDriverKey = firstTrip
             ? (firstTrip.driverLicense || ('mock-' + firstTrip.driverId))
             : null;
         const sched = S.schedule(routeDriverKey);
-
-        // Date Picker
         const w = week();
+
+        if (selDateIdx === null) {
+            // STEP 2: Show Date Picker Grid
+            const dateTitle = el('h2', 'view-title animate-in', t('selectDate'));
+            dateTitle.style.textAlign = 'center';
+            dateTitle.style.marginTop = '20px';
+            dateTitle.style.marginBottom = '20px';
+            dateTitle.style.color = 'var(--text-muted)';
+            dateTitle.style.fontSize = '1.2rem';
+            mc.appendChild(dateTitle);
+
+            const picker = el('div', 'date-picker-grid animate-in');
+            picker.style.display = 'grid';
+            picker.style.gridTemplateColumns = 'repeat(auto-fill, minmax(90px, 1fr))';
+            picker.style.gap = '16px';
+            
+            w.forEach((day, idx) => {
+                const pill = el('div');
+                const effConf = spDates.find(x => x.date === day.iso) || sched[idx];
+                const status = effConf ? effConf.status : 'available';
+                pill.className = `date-pill state-${status}`;
+                pill.style.padding = '24px 10px';
+                pill.style.minWidth = '0';
+                pill.innerHTML = `<span class="day-name" style="font-size:1rem;color:var(--text-muted);">${t(day.key)}</span><span class="day-num" style="font-size:2rem;margin-top:4px;">${day.num}</span>`;
+                
+                pill.onclick = () => { 
+                    selDateIdx = idx; 
+                    render(); 
+                };
+                picker.appendChild(pill);
+            });
+            mc.appendChild(picker);
+            return;
+        }
+
+        // STEP 3: Results
+        // horizontal date picker container
         const picker = el('div', 'date-picker-container animate-in');
         w.forEach((day, idx) => {
             const pill = el('div');
@@ -677,13 +741,18 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         mc.appendChild(picker);
 
         // Trip cards filtered by day status
-        // FIX: spDates and sched are now properly declared above in this scope.
         const effConf = spDates.find(x => x.date === w[selDateIdx].iso) || sched[selDateIdx];
         const dayStatus = effConf ? effConf.status : 'available';
-        const list = el('div', 'card-list');
+        const list = el('div', 'card-list animate-in');
+
+        const noTripsMsg = window.currentLang === 'ar' ? 'لا توجد رحلات متاحة لهذا الاختيار' :
+                           window.currentLang === 'fr' ? 'Aucun trajet disponible pour cette sélection' :
+                           'No trips available for this selection';
+        const noTripsHtml = `<div style="text-align:center;color:var(--text-muted);padding:40px 20px;background:var(--card-bg);border-radius:16px;border:var(--glass-border);margin-top:10px;"><i data-lucide="car-front" style="width:48px;height:48px;display:block;margin:0 auto 16px;opacity:0.5;"></i><p style="font-size:1.1rem;font-weight:600;">${noTripsMsg}</p></div>`;
+
 
         if (dayStatus === 'off') {
-            list.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;"><i data-lucide="calendar-x" style="width:48px;height:48px;display:block;margin:0 auto 16px;opacity:0.5;"></i>${t('noTripsOnDate')}</p>`;
+            list.innerHTML = noTripsHtml;
         } else {
             // Combine Static Trips and Firebase Drivers
             const staticTrips = (trips || []).filter(tr => tr.destinationId === selDestId);
@@ -729,10 +798,10 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
                 }
             }
             
-            if (raw.length === 0) {
-                list.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;">${t('noTrips')}</p>`;
+            if (final.length === 0) {
+                list.innerHTML = noTripsHtml;
             } else {
-                raw.forEach((trip, i) => {
+                final.forEach((trip, i) => {
                     const dKey = trip.driverLicense || ('mock-' + (trip.driverId || trip.id));
                     const dConf = spDates.find(x => x.date === w[selDateIdx].iso) || S.schedule(dKey)[selDateIdx];
                     const card = createTripCard(trip, i, trip.id === '__me__', dConf);
@@ -1012,13 +1081,13 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
         const content = el('div');
         content.style.cssText = 'width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:24px;';
         content.innerHTML = `
-          <div style="position:relative; cursor:pointer;" onclick="renderProfile(); document.body.removeChild(document.querySelector('.tawat-modal'));">
-              <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg, var(--accent-color), #3b82f6);display:flex;align-items:center;justify-content:center;border:4px solid rgba(255,255,255,0.1);box-shadow:0 10px 25px rgba(0,0,0,0.3); overflow:hidden;">
+          <input type="file" id="driverPhotoInput" accept="image/*" style="display:none;" />
+          <div style="position:relative; cursor:pointer;" id="driverAvatarClickable">
+              <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg, var(--accent-color), #3b82f6);display:flex;align-items:center;justify-content:center;border:4px solid rgba(255,255,255,0.1);box-shadow:0 10px 25px rgba(0,0,0,0.3); overflow:hidden;" id="driverAvatarCircle">
                   ${S.driverPhotoURL() ? `<img src="${S.driverPhotoURL()}" style="width:100%;height:100%;object-fit:cover;" />` : `<i data-lucide="user" style="width:60px;height:60px;color:#fff;"></i>`}
               </div>
-              <div style="position:absolute;bottom:5px;right:5px;width:24px;height:24px;background:#22c55e;border-radius:50%;border:3px solid #0f172a;"></div>
-              <div style="position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);padding:4px 10px;border-radius:12px;font-size:0.7rem;color:#fff;white-space:nowrap;border:1px solid rgba(255,255,255,0.2);">
-                  <i data-lucide="camera" style="width:12px;height:12px;vertical-align:middle;"></i> Edit
+              <div style="position:absolute;bottom:5px;right:5px;width:28px;height:28px;background:#22c55e;border-radius:50%;border:3px solid #0f172a;display:flex;align-items:center;justify-content:center;">
+                  <i data-lucide="camera" style="width:14px;height:14px;color:#fff;"></i>
               </div>
           </div>
 
@@ -1068,6 +1137,23 @@ document.documentElement.dir = window.currentLang === 'ar' ? 'rtl' : 'ltr';
             localStorage.clear();
             location.reload();
         };
+
+        // Wire up the photo upload
+        const fileInput = dialog.querySelector('#driverPhotoInput');
+        const avatarBtn = dialog.querySelector('#driverAvatarClickable');
+        const avatarCircle = dialog.querySelector('#driverAvatarCircle');
+        if (avatarBtn && fileInput) {
+            avatarBtn.onclick = () => fileInput.click();
+            fileInput.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                avatarCircle.innerHTML = '<div style="color:#fff;font-size:0.75rem;text-align:center;">Uploading...</div>';
+                const url = await handlePhotoUpload(file, 'driver', S.driverLicense());
+                if (url) {
+                    avatarCircle.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;" />`;
+                }
+            };
+        }
     }
 
     function renderDriverDash() {
